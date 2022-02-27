@@ -53,13 +53,33 @@ The stream is available on: http://{signalserver url}?streamId={STREAM_ID}
 
 ![](/docs/1.png)
 
+## Development:
+
+Requirements: same as build requirements
+
+1. In VS-code File->Open Workspace from File->select the included workspace file
+2. open signalserver/.env, customize
+3. open streamserver/.env, customize
+4. `npm run start:dev`
+
+this command:
+
+- starts the streamserver
+- starts the signalserver, listening on port 4000
+- starts the webpack devserver for the webapp on port 3000, redirects /api calls to localhost:4000(signalserver)
+- opens the browser on `http://localhost:3000/?streamId=default`
+
+The result should be similar like in the picture:
+![](/docs/desktop.jpg)
+
 ## Build on windows:
 
 Requirements:
 
 - [mingw](https://chocolatey.org/packages/mingw)
 - [pkgconfig](https://chocolatey.org/packages/pkgconfiglite)
-- nodejs
+- nodejs 16+
+- go 1.18
 
 1. `npm i`
 2. `npm run build` produces binaries with sample config in /dist

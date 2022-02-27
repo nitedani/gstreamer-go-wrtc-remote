@@ -13,6 +13,7 @@ body {
 video {
   border: 0;
   width: 100%;
+  // background-color: black;
 }
 
 .video-height {
@@ -26,6 +27,18 @@ video:focus {
   border: 0;
   max-width: 100vw;
   max-height: 100vh;
+  .controls {
+    display: flex;
+    //justify-content: center;
+    align-items: center;
+  }
+  .volume-container {
+    > div {
+      margin: 0;
+    }
+
+    width: 160px;
+  }
 }
 
 //@tailwind components;

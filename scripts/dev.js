@@ -6,8 +6,8 @@ const colorette = require('colorette');
 let cpStreamServer = null;
 let cpSignalingServer = null;
 const baseDir = resolve(__dirname, '..');
-const streamServerDir = join(baseDir, 'apps', 'server');
-const signalingServerDir = join(baseDir, 'apps', 'signaling');
+const streamServerDir = join(baseDir, 'apps', 'streamserver');
+const signalingServerDir = join(baseDir, 'apps', 'signalserver');
 
 const spawnStreamServer = () => {
   console.log(colorette.blueBright('Building stream server...'));

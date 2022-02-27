@@ -21,8 +21,8 @@ const runWebpack = (compiler) =>
   });
 
 const baseDir = resolve(__dirname, '..');
-const streamServerDir = join(baseDir, 'apps', 'server');
-const signalingServerDir = join(baseDir, 'apps', 'signaling');
+const streamServerDir = join(baseDir, 'apps', 'streamserver');
+const signalingServerDir = join(baseDir, 'apps', 'signalserver');
 
 const buildStreamServer = async () => {
   const gstreamerDlls = join(streamServerDir, 'gstreamer', 'dll');

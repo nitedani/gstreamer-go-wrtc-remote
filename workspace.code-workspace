@@ -4,13 +4,13 @@
       "path": "."
     },
     {
-      "path": "apps\\server"
-    },
-    {
       "path": "apps\\webapp"
     },
     {
-      "path": "apps\\signaling"
+      "path": "apps\\signalserver"
+    },
+    {
+      "path": "apps\\streamserver"
     }
   ],
   "settings": {}

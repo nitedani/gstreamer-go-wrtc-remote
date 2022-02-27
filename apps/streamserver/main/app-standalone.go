@@ -36,7 +36,6 @@ func main() {
 		godotenv.Load(envFilePath)
 	}
 
-	
 	stream.StartWrtcServer()
 	quitChannel := make(chan os.Signal, 1)
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
