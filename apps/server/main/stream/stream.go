@@ -34,7 +34,7 @@ func remove(s []chan rxgo.Item, i int) []chan rxgo.Item {
 
 var channels = make([]chan rxgo.Item, 0)
 
-func CreateCapture() rxgo.Observable {
+func CreateVideoCapture() rxgo.Observable {
 
 	bitrate, hasEnv := os.LookupEnv("BITRATE")
 	if !hasEnv {
@@ -67,13 +67,12 @@ func CreateCapture() rxgo.Observable {
 		"monitor-index=0",
 		"show-cursor=0",
 		"!",
-
 		"d3d11convert",
 		"!",
-
 		"d3d11download",
 		"!",
-
+		"queue",
+		"!",
 		//Optimize for framerate
 		"vp8enc",
 		"threads=" + threads,
@@ -199,4 +198,8 @@ func CreateCapture() rxgo.Observable {
 			ch <- val
 		}
 	}})
+}
+
+func CreateAudioCapture() {
+
 }

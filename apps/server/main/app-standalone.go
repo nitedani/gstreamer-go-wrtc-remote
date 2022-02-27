@@ -36,7 +36,7 @@ func main() {
 		godotenv.Load(envFilePath)
 	}
 
-	frameBuffers := stream.CreateCapture()
+	frameBuffers := stream.CreateVideoCapture()
 	stream.StartWrtcServer(frameBuffers)
 	quitChannel := make(chan os.Signal, 1)
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
