@@ -4,8 +4,6 @@ Only tested on windows, doesn't include build script for linux.
 
 ## Instructions:
 
----
-
 Streamserver captures the desktop, encodes the frames and sends them to the browser through webrtc.
 
 Signalserver is used to establish the webrtc connection and needs to be accessable by both the streamserver and the viewers browser.
