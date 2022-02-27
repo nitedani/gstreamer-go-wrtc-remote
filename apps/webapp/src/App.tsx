@@ -76,7 +76,7 @@ const App = () => {
             console.log(error);
           }
         };
-
+        const dc = pc.createDataChannel('data');
         pc.createOffer().then(async (offer) => {
           const patchedLocal = {
             type: offer.type,
@@ -86,54 +86,52 @@ const App = () => {
           pc.setLocalDescription(patchedLocal);
 
           await axios.post(signalPath, patchedLocal);
+          pollSignal();
         });
 
-        pollSignal();
-
         // remote control
-        if (window.location.hostname !== 'localhost') {
-          videoRef.current!.addEventListener(
-            'contextmenu',
-            (ev) => {
-              ev.preventDefault();
-              return false;
-            },
-            false,
-          );
-          const dc = pc.createDataChannel('data');
-          dc.onopen = () => {
-            videoRef.current!.onmousemove = (e) => {
-              const width = videoRef.current!.clientWidth;
-              const height = videoRef.current!.clientHeight;
 
-              //normalize mouse position
-              const normX = e.offsetX / width;
-              const normY = e.offsetY / height;
+        videoRef.current!.addEventListener(
+          'contextmenu',
+          (ev) => {
+            ev.preventDefault();
+            return false;
+          },
+          false,
+        );
 
-              dc.send(JSON.stringify({ type: 'move', normX, normY }));
-            };
+        dc.onopen = () => {
+          videoRef.current!.onmousemove = (e) => {
+            const width = videoRef.current!.clientWidth;
+            const height = videoRef.current!.clientHeight;
 
-            videoRef.current!.onmousedown = (e) => {
-              dc.send(JSON.stringify({ type: 'mousedown', button: e.button }));
-            };
+            //normalize mouse position
+            const normX = e.offsetX / width;
+            const normY = e.offsetY / height;
 
-            videoRef.current!.onmouseup = (e) => {
-              dc.send(JSON.stringify({ type: 'mouseup', button: e.button }));
-            };
-
-            videoRef.current!.onwheel = (e) => {
-              dc.send(JSON.stringify({ type: 'wheel', delta: e.deltaY }));
-            };
-
-            document.addEventListener('keydown', (e) => {
-              dc.send(JSON.stringify({ type: 'keydown', key: e.key }));
-            });
-
-            document.addEventListener('keyup', (e) => {
-              dc.send(JSON.stringify({ type: 'keyup', key: e.key }));
-            });
+            dc.send(JSON.stringify({ type: 'move', normX, normY }));
           };
-        }
+
+          videoRef.current!.onmousedown = (e) => {
+            dc.send(JSON.stringify({ type: 'mousedown', button: e.button }));
+          };
+
+          videoRef.current!.onmouseup = (e) => {
+            dc.send(JSON.stringify({ type: 'mouseup', button: e.button }));
+          };
+
+          videoRef.current!.onwheel = (e) => {
+            dc.send(JSON.stringify({ type: 'wheel', delta: e.deltaY }));
+          };
+
+          document.addEventListener('keydown', (e) => {
+            dc.send(JSON.stringify({ type: 'keydown', key: e.key }));
+          });
+
+          document.addEventListener('keyup', (e) => {
+            dc.send(JSON.stringify({ type: 'keyup', key: e.key }));
+          });
+        };
       });
   }, []);
 
