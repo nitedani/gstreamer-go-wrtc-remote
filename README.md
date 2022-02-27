@@ -60,6 +60,8 @@ The stream is available on: http://{signalserver url}?streamId={STREAM_ID}
 Requirements:
 
 - [mingw](https://chocolatey.org/packages/mingw)
-- [pkgconfig](<[pkgconfig](https://chocolatey.org/packages/pkgconfiglite)>)
+- [pkgconfig](https://chocolatey.org/packages/pkgconfiglite)
+- nodejs
 
-`node scripts/build`
+1. `npm i`
+2. `npm run build` produces binaries with sample config in /dist
