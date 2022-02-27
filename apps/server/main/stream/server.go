@@ -3,9 +3,7 @@ package stream
 import (
 	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"server/main/utils"
 	"strconv"
@@ -16,7 +14,6 @@ import (
 	"github.com/go-vgo/robotgo"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
-	"github.com/reactivex/rxgo/v2"
 	"github.com/rs/zerolog/log"
 	"github.com/tinyzimmer/go-gst/gst"
 )
@@ -43,9 +40,8 @@ var connections = make(map[string]*webrtc.PeerConnection)
 
 //collect signals
 var outgoing_signal_chan = make(chan Signal, 100)
-var frames = 0
 
-func SetupNewConnection(frameBuffers rxgo.Observable, viewerId string) (peerConnection *webrtc.PeerConnection) {
+func SetupNewConnection(getVideoChannelFn func() chan *gst.Buffer, getAudioChannelFn func() chan *gst.Buffer, viewerId string) (peerConnection *webrtc.PeerConnection) {
 
 	iceServers := make([]webrtc.ICEServer, 0)
 
@@ -100,15 +96,18 @@ func SetupNewConnection(frameBuffers rxgo.Observable, viewerId string) (peerConn
 	if err != nil {
 		panic(err)
 	}
+	processRTCP(rtpSender)
 
-	go func() {
-		rtcpBuf := make([]byte, 1500)
-		for {
-			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
-				return
-			}
-		}
-	}()
+	audioTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000}, "audio", "pion")
+	if err != nil {
+		panic(err)
+	}
+
+	rtpSender, err = peerConnection.AddTrack(audioTrack)
+	if err != nil {
+		panic(err)
+	}
+	processRTCP(rtpSender)
 
 	peerConnection.OnICECandidate(func(c *webrtc.ICECandidate) {
 		if c == nil {
@@ -128,32 +127,43 @@ func SetupNewConnection(frameBuffers rxgo.Observable, viewerId string) (peerConn
 		log.Info().Str("state", connectionState.String()).Msg("ICE Connection State has changed")
 	})
 
-	go func() {
-
-		frameBuffers.TakeUntil(func(i interface{}) bool {
-			return peerConnection.ConnectionState() == webrtc.PeerConnectionStateDisconnected
-
-		}).ForEach(func(frame_buffer_item interface{}) {
-
-			//fmt.Println("Sending frame")
-			frames++
-			frame_buffer := frame_buffer_item.(*gst.Buffer)
+	sendVideo := func() {
+		channel := getVideoChannelFn()
+		for frame_buffer := range channel {
+			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateDisconnected {
+				return
+			}
 			copied := frame_buffer.DeepCopy()
-
 			err = videoTrack.WriteSample(media.Sample{Data: copied.Bytes(), Duration: copied.Duration()})
 			if err != nil {
-				if errors.Is(err, io.ErrClosedPipe) {
-					fmt.Println("connection closed")
-					return
-				}
-
-				panic(err)
-
+				log.Err(err).Send()
+				return
 			}
+		}
+	}
 
-		}, func(e error) {}, func() {})
+	sendAudio := func() {
+		channel := getAudioChannelFn()
+		for sample_buffer := range channel {
+			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateDisconnected {
+				return
+			}
+			copied := sample_buffer.DeepCopy()
+			err = audioTrack.WriteSample(media.Sample{Data: copied.Bytes(), Duration: copied.Duration()})
+			if err != nil {
+				log.Err(err).Send()
+				return
+			}
+		}
+	}
 
-	}()
+	peerConnection.OnConnectionStateChange(func(connectionState webrtc.PeerConnectionState) {
+		if connectionState == webrtc.PeerConnectionStateConnected {
+			go sendVideo()
+			go sendAudio()
+		}
+
+	})
 
 	return peerConnection
 }
@@ -229,7 +239,7 @@ func SetupRemoteControl(peerConnection *webrtc.PeerConnection) {
 	})
 }
 
-func StartWrtcServer(frameBuffers rxgo.Observable) {
+func StartWrtcServer() {
 
 	signalingServer, hasEnv := os.LookupEnv("SIGNAL_SERVER_URL")
 	if !hasEnv {
@@ -254,6 +264,8 @@ func StartWrtcServer(frameBuffers rxgo.Observable) {
 
 	log.Info().Str("STREAM_ID", streamId).Send()
 
+	getVideoChannelFn := CreateVideoCapture()
+	getAudioChannelFn := CreateAudioCapture()
 	go func() {
 		client := resty.New()
 		for {
@@ -268,38 +280,61 @@ func StartWrtcServer(frameBuffers rxgo.Observable) {
 			}
 
 			body := utils.ParseJson[[]Signal](res)
-			log.Info().Int("count", len(body.Value)).Msg("Received signals")
 
+			//offers come before candidates
+			sortedSignals := make([]Signal, 0)
 			for _, signal := range body.Value {
+				if signal.Type == "offer" {
+					sortedSignals = append(sortedSignals, signal)
+				}
+			}
+			for _, signal := range body.Value {
+				if signal.Type == "candidate" {
+					sortedSignals = append(sortedSignals, signal)
+				}
+			}
+
+			log.Info().Int("count", len(sortedSignals)).Msg("Received signals")
+
+			for _, signal := range sortedSignals {
 
 				viewerId := signal.ViewerId
 				peerConnection := connections[viewerId]
 
 				if peerConnection == nil {
-					peerConnection = SetupNewConnection(frameBuffers, viewerId)
-					if remoteEnabledBool {
-						SetupRemoteControl(peerConnection)
+					if signal.Type == "offer" {
+						peerConnection = SetupNewConnection(getVideoChannelFn, getAudioChannelFn, viewerId)
+						if remoteEnabledBool {
+							SetupRemoteControl(peerConnection)
+						}
+						connections[viewerId] = peerConnection
+
+					} else {
+						continue
 					}
-					connections[viewerId] = peerConnection
 				}
 
 				if signal.Type == "candidate" {
 					if err := peerConnection.AddICECandidate(signal.Candidate); err != nil {
-						panic(err)
+						log.Err(err).Send()
+						return
 					}
 				}
 
 				if signal.Type == "offer" {
 
 					if err := peerConnection.SetRemoteDescription(webrtc.SessionDescription{SDP: signal.SDP, Type: webrtc.SDPTypeOffer}); err != nil {
-						panic(err)
+						log.Err(err).Send()
+						return
 					}
 					answer, answerErr := peerConnection.CreateAnswer(nil)
 					if answerErr != nil {
-						panic(answerErr)
+						log.Err(answerErr).Send()
+						return
 					}
 					if err := peerConnection.SetLocalDescription(answer); err != nil {
-						panic(err)
+						log.Err(err).Send()
+						return
 					}
 					signal := Signal{
 						Type:     "answer",
@@ -332,4 +367,16 @@ func StartWrtcServer(frameBuffers rxgo.Observable) {
 		}
 	}()
 
+}
+
+func processRTCP(rtpSender *webrtc.RTPSender) {
+	go func() {
+		rtcpBuf := make([]byte, 1500)
+
+		for {
+			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
+				return
+			}
+		}
+	}()
 }

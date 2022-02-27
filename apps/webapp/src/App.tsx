@@ -39,10 +39,13 @@ const App = () => {
           iceServers,
         });
 
-        //pc.addTransceiver('audio', { direction: 'sendrecv' });
         pc.addTransceiver('video', { direction: 'sendrecv' });
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
 
         pc.ontrack = (event) => {
+          console.log(event.streams[0].getVideoTracks());
+          console.log(event.streams[0].getAudioTracks());
+
           videoRef.current!.srcObject = event.streams[0];
         };
 
@@ -165,7 +168,12 @@ const App = () => {
             <FullscreenIcon />
           </IconButton>
         </div>
-        <video className="video-height" muted autoPlay ref={videoRef}></video>
+        <video
+          className="video-height"
+          controls
+          autoPlay
+          ref={videoRef}
+        ></video>
       </div>
     </div>
   );

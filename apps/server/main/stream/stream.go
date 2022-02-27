@@ -1,13 +1,11 @@
 package stream
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/reactivex/rxgo/v2"
 	"github.com/rs/zerolog/log"
 	"github.com/tinyzimmer/go-gst/gst"
 	"github.com/tinyzimmer/go-gst/gst/app"
@@ -27,14 +25,15 @@ func ByteCountSI(b int64) string {
 		float64(b)/float64(div), "kMGTPE"[exp])
 }
 
-func remove(s []chan rxgo.Item, i int) []chan rxgo.Item {
+func remove(s []chan *gst.Buffer, i int) []chan *gst.Buffer {
 	s[i] = s[len(s)-1]
 	return s[:len(s)-1]
 }
 
-var channels = make([]chan rxgo.Item, 0)
+var video_channels = make([]chan *gst.Buffer, 0)
+var audio_channels = make([]chan *gst.Buffer, 0)
 
-func CreateVideoCapture() rxgo.Observable {
+func CreateVideoCapture() func() chan *gst.Buffer {
 
 	bitrate, hasEnv := os.LookupEnv("BITRATE")
 	if !hasEnv {
@@ -61,7 +60,7 @@ func CreateVideoCapture() rxgo.Observable {
 		threads = "2"
 	}
 
-	frames_ch := make(chan rxgo.Item)
+	frames_ch := make(chan *gst.Buffer)
 	pipelinearr := []string{
 		"d3d11screencapturesrc",
 		"monitor-index=0",
@@ -111,8 +110,6 @@ func CreateVideoCapture() rxgo.Observable {
 	var frames = 0
 	var buffer_len = int64(0)
 
-	//every second, print stats
-
 	go func() {
 		for {
 
@@ -127,9 +124,9 @@ func CreateVideoCapture() rxgo.Observable {
 			per_buffer := buffer_len / int64(frames)
 
 			log.Info().
-				Int("fps", frames).
-				Int("frame_size_kb", int(per_buffer/1024)).
-				Int("bitrate_kb", int(buffer_len/1024)).
+				Int("video_framerate", frames).
+				Int("video_frame_size_kb", int(per_buffer/1024)).
+				Int("video_bitrate_kb", int(buffer_len/1024)).
 				Send()
 
 			frames = 0
@@ -157,7 +154,7 @@ func CreateVideoCapture() rxgo.Observable {
 			buffer_len += len
 
 			select {
-			case frames_ch <- rxgo.Of(buffer):
+			case frames_ch <- buffer:
 				break
 			default:
 				break
@@ -172,13 +169,15 @@ func CreateVideoCapture() rxgo.Observable {
 		for {
 			val := <-frames_ch
 
-			for i := 0; i < len(channels); i++ {
+			for i := 0; i < len(video_channels); i++ {
 				select {
-				case channels[i] <- val:
-				default:
-					channels = remove(channels, i)
-					log.Info().Int("viewers", len(channels)).Msg("Viewer disconnected")
-					if len(channels) == 0 {
+				case video_channels[i] <- val:
+				case <-time.After(time.Millisecond * 100):
+					close(video_channels[i])
+					video_channels = remove(video_channels, i)
+					log.Info().Int("viewers", len(video_channels)).Msg("Closing video channel")
+					if len(video_channels) == 0 {
+						log.Info().Msg("Pausing screen capture")
 						pipeline.SetState(gst.StatePaused)
 					}
 				}
@@ -188,18 +187,142 @@ func CreateVideoCapture() rxgo.Observable {
 
 	}()
 
-	return rxgo.Defer([]rxgo.Producer{func(_ context.Context, ch chan<- rxgo.Item) {
-		pipeline.SetState(gst.StatePlaying)
-		channel := make(chan rxgo.Item)
-		channels = append(channels, channel)
-		log.Info().Int("viewers", len(channels)).Msg("Viewer connected")
-		for {
-			val := <-channel
-			ch <- val
+	return func() chan *gst.Buffer {
+		channel := make(chan *gst.Buffer)
+		video_channels = append(video_channels, channel)
+		if condition := pipeline.GetState() != gst.StatePlaying; condition {
+			log.Info().Int("viewers", len(video_channels)).Msg("Starting video capture")
+			pipeline.SetState(gst.StatePlaying)
 		}
-	}})
+		return channel
+	}
 }
 
-func CreateAudioCapture() {
+func CreateAudioCapture() func() chan *gst.Buffer {
+
+	samples_ch := make(chan *gst.Buffer)
+	pipelinearr := []string{
+		"wasapisrc",
+		"low-latency=true",
+		"loopback=true",
+		"!",
+		"audioconvert",
+		"!",
+		"queue2",
+		"max-size-buffers=0",
+		"!",
+		"opusenc",
+		"max-payload-size=1500",
+		"bitrate=128000",
+		"!",
+		"appsink",
+		"name=appsink",
+	}
+
+	pipelineString := strings.Join(pipelinearr, " ")
+
+	gst.Init(nil)
+	pipeline, err := gst.NewPipelineFromString(pipelineString)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+
+	sink_el, _ := pipeline.GetElementByName("appsink")
+
+	sink := app.SinkFromElement(sink_el)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+
+	var samples = 0
+	var buffer_len = int64(0)
+
+	go func() {
+		for {
+
+			if pipeline.GetState() != gst.StatePlaying {
+				time.Sleep(time.Second)
+				samples = 0
+				buffer_len = 0
+				continue
+			}
+
+			time.Sleep(time.Second)
+			per_buffer := buffer_len / int64(samples)
+
+			log.Info().
+				Int("audio_samplerate", samples).
+				Int("audio_samples_size_kb", int(per_buffer/1024)).
+				Int("audio_bitrate_kb", int(buffer_len/1024)).
+				Send()
+
+			samples = 0
+			buffer_len = 0
+		}
+	}()
+
+	sink.SetCallbacks(&app.SinkCallbacks{
+
+		NewSampleFunc: func(sink *app.Sink) gst.FlowReturn {
+			sample := sink.PullSample()
+			if sample == nil {
+				return gst.FlowEOS
+			}
+
+			buffer := sample.GetBuffer()
+			if buffer == nil {
+				return gst.FlowError
+			}
+
+			len := buffer.GetSize()
+
+			samples++
+			buffer_len += len
+
+			select {
+			case samples_ch <- buffer:
+				break
+			default:
+				break
+			}
+
+			return gst.FlowOK
+		},
+	})
+
+	go func() {
+
+		for {
+			val := <-samples_ch
+
+			for i := 0; i < len(audio_channels); i++ {
+				select {
+				case audio_channels[i] <- val:
+				case <-time.After(time.Millisecond * 100):
+					close(audio_channels[i])
+					audio_channels = remove(audio_channels, i)
+					log.Info().Int("viewers", len(audio_channels)).Msg("Closing audio channel")
+					if len(audio_channels) == 0 {
+						log.Info().Msg("Pausing audio capture")
+						pipeline.SetState(gst.StatePaused)
+					}
+				}
+			}
+
+		}
+
+	}()
+
+	return func() chan *gst.Buffer {
+		channel := make(chan *gst.Buffer)
+		audio_channels = append(audio_channels, channel)
+		if condition := pipeline.GetState() != gst.StatePlaying; condition {
+			log.Info().Int("viewers", len(audio_channels)).Msg("Starting audio capture")
+			pipeline.SetState(gst.StatePlaying)
+		}
+		return channel
+	}
 
 }
