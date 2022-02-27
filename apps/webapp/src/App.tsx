@@ -116,6 +116,8 @@ const App = () => {
           };
 
           videoRef.current!.onmousedown = (e) => {
+            videoRef.current!.muted = false;
+            videoRef.current!.volume = 1;
             dc.send(JSON.stringify({ type: 'mousedown', button: e.button }));
           };
 
@@ -168,12 +170,7 @@ const App = () => {
             <FullscreenIcon />
           </IconButton>
         </div>
-        <video
-          className="video-height"
-          controls
-          autoPlay
-          ref={videoRef}
-        ></video>
+        <video className="video-height" muted autoPlay ref={videoRef}></video>
       </div>
     </div>
   );
