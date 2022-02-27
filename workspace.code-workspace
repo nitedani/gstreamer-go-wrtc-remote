@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "path": "."
+    },
+    {
+      "path": "apps\\server"
+    },
+    {
+      "path": "apps\\webapp"
+    },
+    {
+      "path": "apps\\signaling"
+    }
+  ],
+  "settings": {}
+}

@@ -1,0 +1,16 @@
+runtime: go118
+instance_class: F1
+automatic_scaling:
+  max_instances: 1
+env_variables:
+  GIN_MODE: 'release'
+main: ./apps/server/src
+handlers:
+  # all the static files that we normally serve ourselves are defined here and Google will handle
+  # serving them for us from it's own CDN / edge locations. For all the configuration options see:
+  # https://cloud.google.com/appengine/docs/go/config/appconfig#Go_app_yaml_Static_file_handlers
+  - url: /.*
+    static_dir: dist/webapp
+  # finally, we route all other requests to our application. The script name just means "the go app"
+  - url: /api
+    script: auto
