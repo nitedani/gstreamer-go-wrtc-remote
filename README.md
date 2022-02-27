@@ -1,6 +1,6 @@
 ## Low latency screen sharing/remote control
 
-<br>
+Only tested on windows, doesn't include build script for linux.
 
 ## Instructions:
 
