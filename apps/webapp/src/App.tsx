@@ -130,6 +130,17 @@ const App = () => {
           setLoading(false);
         };
 
+        let isVolumeSet = false;
+
+        videoRef.current!.addEventListener('mousedown', () => {
+          if (!isVolumeSet) {
+            videoRef.current!.muted = false;
+            videoRef.current!.volume = 0.5;
+            setVolume(50);
+            isVolumeSet = true;
+          }
+        });
+
         dc.onopen = () => {
           videoRef.current!.onmousemove = (e) => {
             const width = videoRef.current!.clientWidth;
@@ -142,12 +153,9 @@ const App = () => {
             dc.send(JSON.stringify({ type: 'move', normX, normY }));
           };
 
-          videoRef.current!.onmousedown = (e) => {
-            videoRef.current!.muted = false;
-            videoRef.current!.volume = 0.5;
-            setVolume(50);
+          videoRef.current!.addEventListener('mousedown', (e) => {
             dc.send(JSON.stringify({ type: 'mousedown', button: e.button }));
-          };
+          });
 
           videoRef.current!.onmouseup = (e) => {
             dc.send(JSON.stringify({ type: 'mouseup', button: e.button }));
