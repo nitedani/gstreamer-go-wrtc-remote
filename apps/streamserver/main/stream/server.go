@@ -81,7 +81,20 @@ func SetupNewConnection(getVideoChannelFn func() chan *gst.Buffer, getAudioChann
 		panic(err)
 	}
 
-	videoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000}, "video", "pion")
+	encoder, hasEnv := os.LookupEnv("ENCODER")
+	if !hasEnv {
+		encoder = "vp8"
+	}
+
+	var videoEncoder string
+
+	if encoder == "vp8" {
+		videoEncoder = webrtc.MimeTypeVP8
+	} else if encoder == "h264" {
+		videoEncoder = webrtc.MimeTypeH264
+	}
+
+	videoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: videoEncoder, ClockRate: 90000}, "video", "pion")
 	if err != nil {
 		panic(err)
 	}

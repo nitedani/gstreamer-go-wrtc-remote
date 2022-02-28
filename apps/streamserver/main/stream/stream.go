@@ -67,8 +67,14 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		threads = "2"
 	}
 
+	encoder, hasEnv := os.LookupEnv("ENCODER")
+	if !hasEnv {
+		log.Info().Msg("No encoder specified, defaulting to vp8")
+		encoder = "vp8"
+	}
+
 	frames_ch := make(chan *gst.Buffer)
-	pipelinearr := []string{
+	pipelinearr_vp8 := []string{
 		"d3d11screencapturesrc",
 		"monitor-index=0",
 		"show-cursor=0",
@@ -80,18 +86,19 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"d3d11download",
 		"!",
 
-		"queue",
+		"queue2",
+		"max-size-buffers=0",
+		"max-size-bytes=0",
 		"!",
 
 		//Optimize for framerate
 		"vp8enc",
 		"threads=" + threads,
-		"deadline=100",
+		"deadline=1",
 		"max-quantizer=40",
 		"min-quantizer=10",
 		"max-intra-bitrate=" + bitrate,
 		"target-bitrate=" + bitrate,
-		//"keyframe-max-dist=10",
 		"!",
 
 		fmt.Sprintf("video/x-vp8,framerate=%s/1,width=%s,height=%s", framerate, sizes[0], sizes[1]),
@@ -101,7 +108,51 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"name=appsink",
 	}
 
-	pipelineString := strings.Join(pipelinearr, " ")
+	pipelinearr_h264 := []string{
+		"d3d11screencapturesrc",
+		"monitor-index=0",
+		"show-cursor=0",
+		"!",
+
+		"d3d11convert",
+		"!",
+
+		"d3d11download",
+		"!",
+
+		"queue2",
+		"max-size-buffers=0",
+		"max-size-bytes=0",
+		"!",
+
+		//Optimize for framerate
+		"openh264enc",
+		"bitrate=" + bitrate,
+		"complexity=0",
+		"multi-thread=" + threads,
+		"qp-max=40",
+		"slice-mode=5",
+		"!",
+
+		fmt.Sprintf("video/x-h264,framerate=%s/1,width=%s,height=%s", framerate, sizes[0], sizes[1]),
+		"!",
+
+		"appsink",
+		"name=appsink",
+	}
+
+	var pipelineArr []string
+
+	switch encoder {
+	case "vp8":
+		pipelineArr = pipelinearr_vp8
+	case "h264":
+		pipelineArr = pipelinearr_h264
+	default:
+		log.Fatal().Msg("Invalid encoder specified")
+	}
+
+	pipelineString := strings.Join(pipelineArr, " ")
 
 	gst.Init(nil)
 	pipeline, err := gst.NewPipelineFromString(pipelineString)
