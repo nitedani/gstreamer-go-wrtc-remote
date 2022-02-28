@@ -41,46 +41,40 @@ var connections = make(map[string]*webrtc.PeerConnection)
 //collect signals
 var outgoing_signal_chan = make(chan Signal, 100)
 
+type ICEServer struct {
+	URLs           []string    `json:"urls"`
+	Username       string      `json:"username,omitempty"`
+	Credential     interface{} `json:"credential,omitempty"`
+	CredentialType string      `json:"credentialType,omitempty"`
+}
+
 func SetupNewConnection(getVideoChannelFn func() chan *gst.Buffer, getAudioChannelFn func() chan *gst.Buffer, viewerId string) (peerConnection *webrtc.PeerConnection) {
-
-	iceServers := make([]webrtc.ICEServer, 0)
-
-	turn_server_url, hasEnv := os.LookupEnv("TURN_SERVER_URL")
-	if hasEnv && turn_server_url != "" {
-		iceServer := webrtc.ICEServer{
-			URLs: []string{turn_server_url},
-		}
-		turn_server_username := os.Getenv("TURN_SERVER_USERNAME")
-		if turn_server_username != "" {
-			iceServer.Username = turn_server_username
-		}
-		turn_server_password := os.Getenv("TURN_SERVER_PASSWORD")
-		if turn_server_password != "" {
-			iceServer.Credential = turn_server_password
-			iceServer.CredentialType = webrtc.ICECredentialTypePassword
-		}
-		iceServers = append(iceServers, iceServer)
+	signalingServer, hasEnv := os.LookupEnv("SIGNAL_SERVER_URL")
+	if !hasEnv {
+		panic("SIGNAL_SERVER_URL not set")
 	}
 
-	stun_server_url, hasEnv := os.LookupEnv("STUN_SERVER_URL")
-	if hasEnv && stun_server_url != "" {
-		iceServer := webrtc.ICEServer{
-			URLs: []string{stun_server_url},
-		}
-		stun_server_username := os.Getenv("STUN_SERVER_USERNAME")
-		if stun_server_username != "" {
-			iceServer.Username = stun_server_username
-		}
-		stun_server_password := os.Getenv("STUN_SERVER_PASSWORD")
-		if stun_server_password != "" {
-			iceServer.Credential = stun_server_password
-			iceServer.CredentialType = webrtc.ICECredentialTypePassword
-		}
-		iceServers = append(iceServers, iceServer)
-	}
+	//Get ice server config from the signalserver
+	client := resty.New()
+	res, _ := client.R().
+		SetHeader("Accept", "application/json").
+		Get(fmt.Sprintf("%s/ice-config", signalingServer))
 
+	parsed := utils.ParseJson[[]ICEServer](res)
+	iceServers := parsed.Value
+
+	parsedServers := make([]webrtc.ICEServer, len(iceServers))
+	for i, iceServer := range iceServers {
+		parsedServers[i] = webrtc.ICEServer{
+			URLs:           iceServer.URLs,
+			Username:       iceServer.Username,
+			Credential:     iceServer.Credential,
+			CredentialType: webrtc.ICECredentialTypePassword,
+		}
+	}
+	log.Info().Msgf("Got ice servers: %+v", parsedServers)
 	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{
-		ICEServers: iceServers,
+		ICEServers: parsedServers,
 	})
 
 	if err != nil {
@@ -188,53 +182,55 @@ func SetupRemoteControl(peerConnection *webrtc.PeerConnection) {
 	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
 		screen_x, screen_y := robotgo.GetScreenSize()
 		d.OnOpen(func() {
-			d.OnMessage(func(msg webrtc.DataChannelMessage) {
+			//Send messages here
+		})
 
-				var command Command
-				err := json.Unmarshal(msg.Data, &command)
-				if err != nil {
-					panic(err)
-				}
+		d.OnMessage(func(msg webrtc.DataChannelMessage) {
 
-				if command.Type == "move" {
+			var command Command
+			err := json.Unmarshal(msg.Data, &command)
+			if err != nil {
+				panic(err)
+			}
 
-					x := int(command.NormX * float32(screen_x))
-					y := int(command.NormY * float32(screen_y))
+			if command.Type == "move" {
 
-					//print
-					//fmt.Printf("Received mouse command: %d, %d \n", x, y)
+				x := int(command.NormX * float32(screen_x))
+				y := int(command.NormY * float32(screen_y))
 
-					robotgo.Move(int(x), int(y))
-				}
+				//print
+				//fmt.Printf("Received mouse command: %d, %d \n", x, y)
 
-				if command.Type == "mousedown" {
-					mouse_key := mouse_keys[command.Button]
-					fmt.Printf("Received mouse down command: %s \n", mouse_key)
-					robotgo.Toggle(mouse_key, "down")
-				}
+				robotgo.Move(int(x), int(y))
+			}
 
-				if command.Type == "mouseup" {
-					mouse_key := mouse_keys[command.Button]
-					fmt.Printf("Received mouse up command: %s \n", mouse_key)
-					robotgo.Toggle(mouse_key, "up")
-				}
+			if command.Type == "mousedown" {
+				mouse_key := mouse_keys[command.Button]
+				fmt.Printf("Received mouse down command: %s \n", mouse_key)
+				robotgo.Toggle(mouse_key, "down")
+			}
 
-				if command.Type == "keydown" {
-					fmt.Printf("Received keydown: %s \n", command.Key)
-					robotgo.KeyDown(strings.ToLower(command.Key))
-				}
+			if command.Type == "mouseup" {
+				mouse_key := mouse_keys[command.Button]
+				fmt.Printf("Received mouse up command: %s \n", mouse_key)
+				robotgo.Toggle(mouse_key, "up")
+			}
 
-				if command.Type == "keyup" {
-					fmt.Printf("Received keyup: %s \n", command.Key)
-					robotgo.KeyUp(strings.ToLower(command.Key))
-				}
+			if command.Type == "keydown" {
+				fmt.Printf("Received keydown: %s \n", command.Key)
+				robotgo.KeyDown(strings.ToLower(command.Key))
+			}
 
-				if command.Type == "wheel" {
-					fmt.Printf("Received wheel: %f \n", command.Delta)
-					robotgo.Scroll(0, int(command.Delta/5))
-				}
+			if command.Type == "keyup" {
+				fmt.Printf("Received keyup: %s \n", command.Key)
+				robotgo.KeyUp(strings.ToLower(command.Key))
+			}
 
-			})
+			if command.Type == "wheel" {
+				fmt.Printf("Received wheel: %f \n", command.Delta)
+				robotgo.Scroll(0, int(command.Delta/5))
+			}
+
 		})
 	})
 }

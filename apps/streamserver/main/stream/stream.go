@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -25,13 +26,19 @@ func ByteCountSI(b int64) string {
 		float64(b)/float64(div), "kMGTPE"[exp])
 }
 
-func remove(s []chan *gst.Buffer, i int) []chan *gst.Buffer {
+func remove(s []MediaChannel, i int) []MediaChannel {
 	s[i] = s[len(s)-1]
 	return s[:len(s)-1]
 }
 
-var video_channels = make([]chan *gst.Buffer, 0)
-var audio_channels = make([]chan *gst.Buffer, 0)
+type MediaChannel struct {
+	Channel chan *gst.Buffer
+	Context context.Context
+	Cancel  context.CancelFunc
+}
+
+var video_channels = make([]MediaChannel, 0)
+var audio_channels = make([]MediaChannel, 0)
 
 func CreateVideoCapture() func() chan *gst.Buffer {
 
@@ -66,12 +73,16 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"monitor-index=0",
 		"show-cursor=0",
 		"!",
+
 		"d3d11convert",
 		"!",
+
 		"d3d11download",
 		"!",
+
 		"queue",
 		"!",
+
 		//Optimize for framerate
 		"vp8enc",
 		"threads=" + threads,
@@ -165,36 +176,43 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 	})
 
 	go func() {
-
 		for {
 			val := <-frames_ch
-
 			for i := 0; i < len(video_channels); i++ {
-				select {
-				case video_channels[i] <- val:
-				case <-time.After(time.Millisecond * 100):
-					close(video_channels[i])
-					video_channels = remove(video_channels, i)
-					log.Info().Int("viewers", len(video_channels)).Msg("Closing video channel")
-					if len(video_channels) == 0 {
-						log.Info().Msg("Pausing screen capture")
-						pipeline.SetState(gst.StatePaused)
+				go func(i int) {
+					select {
+					case <-video_channels[i].Context.Done():
+					case video_channels[i].Channel <- val:
+					case <-time.After(time.Millisecond * 100):
+						video_channels[i].Cancel()
+						<-video_channels[i].Context.Done()
+						close(video_channels[i].Channel)
+						video_channels = remove(video_channels, i)
+						log.Info().Int("viewers", len(video_channels)).Msg("Closing video channel")
+						if len(video_channels) == 0 {
+							log.Info().Msg("Pausing screen capture")
+							pipeline.SetState(gst.StatePaused)
+						}
 					}
-				}
+				}(i)
 			}
-
 		}
-
 	}()
 
 	return func() chan *gst.Buffer {
-		channel := make(chan *gst.Buffer)
-		video_channels = append(video_channels, channel)
+		ctx, cancel := context.WithCancel(context.Background())
+		mediaChannel := MediaChannel{
+			Channel: make(chan *gst.Buffer),
+			Context: ctx,
+			Cancel:  cancel,
+		}
+
+		video_channels = append(video_channels, mediaChannel)
 		if condition := pipeline.GetState() != gst.StatePlaying; condition {
 			log.Info().Int("viewers", len(video_channels)).Msg("Starting video capture")
 			pipeline.SetState(gst.StatePlaying)
 		}
-		return channel
+		return mediaChannel.Channel
 	}
 }
 
@@ -293,36 +311,45 @@ func CreateAudioCapture() func() chan *gst.Buffer {
 	})
 
 	go func() {
-
 		for {
 			val := <-samples_ch
-
 			for i := 0; i < len(audio_channels); i++ {
-				select {
-				case audio_channels[i] <- val:
-				case <-time.After(time.Millisecond * 100):
-					close(audio_channels[i])
-					audio_channels = remove(audio_channels, i)
-					log.Info().Int("viewers", len(audio_channels)).Msg("Closing audio channel")
-					if len(audio_channels) == 0 {
-						log.Info().Msg("Pausing audio capture")
-						pipeline.SetState(gst.StatePaused)
+				go func(i int) {
+
+					select {
+					case <-audio_channels[i].Context.Done():
+						return
+					case audio_channels[i].Channel <- val:
+					case <-time.After(time.Millisecond * 100):
+						audio_channels[i].Cancel()
+						<-audio_channels[i].Context.Done()
+						close(audio_channels[i].Channel)
+						audio_channels = remove(audio_channels, i)
+						log.Info().Int("viewers", len(audio_channels)).Msg("Closing audio channel")
+						if len(audio_channels) == 0 {
+							log.Info().Msg("Pausing audio capture")
+							pipeline.SetState(gst.StatePaused)
+						}
 					}
-				}
+				}(i)
 			}
-
 		}
-
 	}()
 
 	return func() chan *gst.Buffer {
-		channel := make(chan *gst.Buffer)
-		audio_channels = append(audio_channels, channel)
-		if condition := pipeline.GetState() != gst.StatePlaying; condition {
+		ctx, cancel := context.WithCancel(context.Background())
+		mediaChannel := MediaChannel{
+			Channel: make(chan *gst.Buffer),
+			Context: ctx,
+			Cancel:  cancel,
+		}
+
+		audio_channels = append(audio_channels, mediaChannel)
+		if pipeline.GetState() != gst.StatePlaying {
 			log.Info().Int("viewers", len(audio_channels)).Msg("Starting audio capture")
 			pipeline.SetState(gst.StatePlaying)
 		}
-		return channel
+		return mediaChannel.Channel
 	}
 
 }
