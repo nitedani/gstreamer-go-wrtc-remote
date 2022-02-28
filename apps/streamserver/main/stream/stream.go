@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,6 +75,9 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 	}
 
 	frames_ch := make(chan *gst.Buffer)
+
+	frames_num, _ := strconv.Atoi(framerate)
+
 	pipelinearr_vp8 := []string{
 		"d3d11screencapturesrc",
 		"monitor-index=0",
@@ -86,9 +90,13 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"d3d11download",
 		"!",
 
+		//fmt.Sprintf("video/x-raw,framerate=%s/1", framerate),
+		//"!",
+
 		"queue2",
 		"max-size-buffers=0",
 		"max-size-bytes=0",
+		"max-size-time=" + strconv.Itoa((1000000000/frames_num)*2),
 		"!",
 
 		//Optimize for framerate
@@ -96,7 +104,7 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"threads=" + threads,
 		"deadline=1",
 		"max-quantizer=40",
-		"min-quantizer=10",
+		"min-quantizer=4",
 		"max-intra-bitrate=" + bitrate,
 		"target-bitrate=" + bitrate,
 		"!",
@@ -120,13 +128,19 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"d3d11download",
 		"!",
 
+		fmt.Sprintf("video/x-raw,framerate=%s/1,width=%s,height=%s", framerate, sizes[0], sizes[1]),
+		"!",
+
 		"queue2",
 		"max-size-buffers=0",
 		"max-size-bytes=0",
+		"max-size-time=" + strconv.Itoa((1000000000/frames_num)*2),
 		"!",
 
 		//Optimize for framerate
 		"openh264enc",
+		"enable-frame-skip=true",
+		"deblocking=1",
 		"bitrate=" + bitrate,
 		"complexity=0",
 		"multi-thread=" + threads,
@@ -134,8 +148,8 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"slice-mode=5",
 		"!",
 
-		fmt.Sprintf("video/x-h264,framerate=%s/1,width=%s,height=%s", framerate, sizes[0], sizes[1]),
-		"!",
+		//fmt.Sprintf("video/x-h264,framerate=%s/1,width=%s,height=%s", framerate, sizes[0], sizes[1]),
+		//"!",
 
 		"appsink",
 		"name=appsink",
