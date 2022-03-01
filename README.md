@@ -33,15 +33,16 @@ TURN_SERVER_PASSWORD=
 Example streamserver config:
 
 ```
+SIGNAL_SERVER_URL=http://localhost:4000/api
 STREAM_ID=default
 REMOTE_ENABLED=true
 BITRATE=15388600
 RESOLUTION=1920x1080
 FRAMERATE=90
-THREADS=6
-ENCODER=h264
+THREADS=4
+#ENCODER=h264
 #ENCODER=vp8
-SIGNAL_SERVER_URL=http://localhost:4000/api
+ENCODER=nvenc
 ```
 
 The stream is available on: http://{signalserver url}?streamId={STREAM_ID}
