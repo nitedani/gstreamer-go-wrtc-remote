@@ -88,10 +88,16 @@ func SetupNewConnection(getVideoChannelFn func() chan *gst.Buffer, getAudioChann
 
 	var videoEncoder string
 
-	if encoder == "vp8" {
+	switch encoder {
+	case "vp8":
 		videoEncoder = webrtc.MimeTypeVP8
-	} else if encoder == "h264" {
+	case "vp9":
+		videoEncoder = webrtc.MimeTypeVP9
+	case "h264":
+	case "nvenc":
 		videoEncoder = webrtc.MimeTypeH264
+	default:
+		panic("Invalid encoder")
 	}
 
 	videoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: videoEncoder, ClockRate: 90000}, "video", "pion")
@@ -137,7 +143,7 @@ func SetupNewConnection(getVideoChannelFn func() chan *gst.Buffer, getAudioChann
 	sendVideo := func() {
 		channel := getVideoChannelFn()
 		for frame_buffer := range channel {
-			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateDisconnected {
+			if peerConnection.ConnectionState() != webrtc.PeerConnectionStateConnected {
 				return
 			}
 			copied := frame_buffer.DeepCopy()
@@ -152,7 +158,7 @@ func SetupNewConnection(getVideoChannelFn func() chan *gst.Buffer, getAudioChann
 	sendAudio := func() {
 		channel := getAudioChannelFn()
 		for sample_buffer := range channel {
-			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateDisconnected {
+			if peerConnection.ConnectionState() != webrtc.PeerConnectionStateConnected {
 				return
 			}
 			copied := sample_buffer.DeepCopy()
@@ -309,6 +315,8 @@ func StartWrtcServer() {
 
 				viewerId := signal.ViewerId
 				peerConnection := connections[viewerId]
+
+				log.Info().Str("type", signal.Type).Str("viewerId", viewerId).Send()
 
 				if peerConnection == nil {
 					if signal.Type == "offer" {

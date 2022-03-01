@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"github.com/rs/zerolog/log"
 )
 
 type Signal struct {
@@ -88,12 +89,21 @@ func StartSignalingServer(g *echo.Group) {
 	}
 
 	g.GET("/ice-config", func(c echo.Context) error {
+
+		log.Info().
+			Msg("client called /ice-config")
+
 		return c.JSON(http.StatusOK, iceServers)
 	})
 
 	// Client route
 	g.POST("/connect", func(c echo.Context) error {
+
 		viewerId := randomStr()
+		log.Info().
+			Str("viewerId", viewerId).
+			Msg("client called /connect")
+
 		c.SetCookie(&http.Cookie{
 			Name:  "connection_id",
 			Value: viewerId,
@@ -106,6 +116,12 @@ func StartSignalingServer(g *echo.Group) {
 		streamId := c.PathParam("streamId")
 		viewerId := getViewerId(c)
 		signals_to_send := make(chan []Signal, 0)
+
+		log.Info().
+			Str("method", "GET").
+			Str("viewerId", viewerId).
+			Str("streamId", streamId).
+			Msg("client called /signal/:streamId")
 
 		go func() {
 			now := time.Now()
@@ -140,10 +156,18 @@ func StartSignalingServer(g *echo.Group) {
 
 	// Client route
 	g.POST("/signal/:streamId", func(c echo.Context) error {
+
 		streamId := c.PathParam("streamId")
 		viewerId := getViewerId(c)
+
+		log.Info().
+			Str("method", "POST").
+			Str("viewerId", viewerId).
+			Str("streamId", streamId).
+			Msg("client called /signal/:streamId")
+
 		if to_server_signal_buffers[streamId] == nil {
-			to_server_signal_buffers[streamId] = make([]Signal, 0)
+			return c.String(http.StatusNotFound, "stream not found")
 		}
 		signal := utils.ParseBody[Signal](c)
 		signal.Value.ViewerId = viewerId
@@ -157,17 +181,29 @@ func StartSignalingServer(g *echo.Group) {
 	g.GET("/signal/:streamId/internal", func(c echo.Context) error {
 		streamId := c.PathParam("streamId")
 		signals_to_send := make(chan []Signal, 0)
+
+		log.Info().
+			Str("method", "GET").
+			Str("streamId", streamId).
+			Msg("server called /signal/:streamId/internal")
+
+		if to_server_signal_buffers[streamId] == nil {
+			to_server_signal_buffers[streamId] = make([]Signal, 0)
+		}
+
 		go func() {
 			now := time.Now()
 			for {
+
+				select {
+				case <-c.Request().Context().Done():
+					return
+				default:
+				}
 				//if 20 seconds passed, return empty array
 				if time.Since(now) > 20*time.Second {
 					signals_to_send <- make([]Signal, 0)
 					return
-				}
-
-				if to_server_signal_buffers[streamId] == nil {
-					to_server_signal_buffers[streamId] = make([]Signal, 0)
 				}
 
 				// wait until signal_buffer[id] is not empty
@@ -181,6 +217,12 @@ func StartSignalingServer(g *echo.Group) {
 			}
 		}()
 
+		select {
+		case <-c.Request().Context().Done():
+			return c.Request().Context().Err()
+		default:
+		}
+
 		json, _ := json.Marshal(<-signals_to_send)
 		return c.String(http.StatusOK, string(json))
 	})
@@ -189,6 +231,11 @@ func StartSignalingServer(g *echo.Group) {
 	g.POST("/signal/:streamId/internal", func(c echo.Context) error {
 		streamId := c.PathParam("streamId")
 		signals := utils.ParseBody[[]Signal](c)
+
+		log.Info().
+			Str("method", "POST").
+			Str("streamId", streamId).
+			Msg("server called /signal/:streamId/internal")
 
 		for _, signal := range signals.Value {
 

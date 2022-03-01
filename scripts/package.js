@@ -46,6 +46,11 @@ const buildStreamServer = async () => {
     )}`,
   };
 
+  execSync(`cd ${streamServerDir}\\main && go clean -cache`, {
+    stdio: 'inherit',
+    env: { ...process.env, ...buildEnv },
+  });
+
   execSync(
     `cd ${streamServerDir}\\main && go build -ldflags=\"-s -w\" -v -o ${TMPbuildPath}`,
     {
@@ -90,15 +95,16 @@ main.exe %1`;
   );
 
   const exampleConfig = `\
+SIGNAL_SERVER_URL=http://localhost:4000/api
 STREAM_ID=default
 REMOTE_ENABLED=true
 BITRATE=10485760
 RESOLUTION=1280x720
 FRAMERATE=30
 THREADS=4
-#ENCODER=vp8
-ENCODER=h264
-SIGNAL_SERVER_URL=http://localhost:4000/api
+ENCODER=nvenc # best, but only for nvidia
+#ENCODER=vp8  # second best
+#ENCODER=h264 # it's ok
 `;
 
   writeFileSync(join(finalPath, 'config'), exampleConfig);
