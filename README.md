@@ -1,11 +1,10 @@
-## High performance, low latency screen sharing/remote control
+## High performance, low latency screen sharing/remote control in go/react
 
-### Libraries used:
+### Languages/libraries used:
 
-- https://github.com/tinyzimmer/go-gst
-- https://github.com/pion/webrtc
-- https://github.com/go-vgo/robotgo
-- https://github.com/labstack/echo
+- webapp: react
+- streamserver: go
+- signalserver: go
 
 ### OS checklist
 
@@ -42,6 +41,7 @@ Streamserver:
 
 Signalserver:
 
+- serves the webapp static files
 - used to establish the webrtc connection between streamserver and the viewers
 - needs to be accessable by both the streamserver and the browser
 
