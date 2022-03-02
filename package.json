@@ -8,7 +8,7 @@
   "main": "dist/app/server/main.js",
   "scripts": {
     "prebuild": "rimraf dist",
-    "postinstall": "cd apps/server && go mod download",
+    "postinstall": "concurrently \"cd apps/streamserver && go mod download\" \"cd apps/signalserver && go mod download\"",
     "build": "node scripts/package.js",
     "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,html,css,scss}\"",
     "start:dev": "concurrently \"webpack serve -c apps/webapp/webpack.config.dev.js\" \"node scripts/dev\" \"opener http://localhost:3000?streamId=default\"",
