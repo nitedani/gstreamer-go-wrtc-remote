@@ -1,12 +1,49 @@
-## Low latency screen sharing/remote control
+## High performance, low latency screen sharing/remote control
 
-Only tested on windows, doesn't include build script for linux.
+### Libraries used:
 
-## Instructions:
+- https://github.com/tinyzimmer/go-gst
+- https://github.com/pion/webrtc
+- https://github.com/go-vgo/robotgo
+- https://github.com/labstack/echo
 
-Streamserver captures the desktop, encodes the frames and sends them to the browser through webrtc.
+### OS checklist
 
-Signalserver is used to establish the webrtc connection and needs to be accessable by both the streamserver and the viewers browser.
+- [x] Windows
+- [ ] Linux
+- [ ] Mac
+
+### Encoder checklist
+
+- [x] VP8
+- [x] OpenH264
+- [x] NVENC H264
+- [ ] X264
+- [ ] QuickSync
+- [ ] AMF
+
+### Feature checklist
+
+- [x] Video
+- [x] Audio
+- [x] Remote mouse
+- [x] Remote keyboard
+- [x] Collaborative control
+- [ ] Remote clipboard
+- [ ] Drag-n-drop file transfer
+- [ ] Centralized, deployable SFU service
+
+## How it works:
+
+Streamserver:
+
+- captures the desktop and audio, sends them to the viewers
+- receives control commands from the viewers
+
+Signalserver:
+
+- used to establish the webrtc connection between streamserver and the viewers
+- needs to be accessable by both the streamserver and the browser
 
 ## Setting up the signalserver:
 
@@ -56,7 +93,8 @@ Requirements: same as build requirements
 1. In VS-code File->Open Workspace from File->select the included workspace file
 2. open signalserver/.env, customize
 3. open streamserver/.env, customize
-4. `npm run start:dev`
+4. `npm i`
+5. `npm run start:dev`
 
 this command:
 
@@ -65,7 +103,7 @@ this command:
 - starts the webpack devserver for the webapp on port 3000, redirects /api calls to localhost:4000(signalserver)
 - opens the browser on `http://localhost:3000/?streamId=default`
 
-The result should be similar like in the picture:
+The result should be similar:
 ![](/docs/desktop.jpg)
 
 ## Build on windows:
@@ -79,3 +117,10 @@ Requirements:
 
 1. `npm i`
 2. `npm run build` produces binaries with sample config in /dist
+
+How to install chocolatey:
+
+```
+Set-ExecutionPolicy Bypass -Scope Process -Force; `
+  iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+```
