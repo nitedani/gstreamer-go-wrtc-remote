@@ -1,18 +1,12 @@
 package utils
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/labstack/echo/v5"
 )
-
-func Body(c echo.Context) any {
-	parsed := new(any)
-	c.Bind(&parsed)
-	return parsed
-}
 
 type ParseJsonValue[T any] struct {
 	Value T
@@ -30,50 +24,26 @@ func ParseJson[T any](response *resty.Response) ParseJsonValue[T] {
 	return parsed
 }
 
-type ResolveFunc[T any] func(value T)
-type RejectFunc func(err error)
-type PromiseCallback[T any] func(resolve ResolveFunc[T], reject RejectFunc)
-type PromiseValue[T any] struct {
-	Value T
-	Error error
+func RandomStr() string {
+	n := 5
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	s := fmt.Sprintf("%X", b)
+	return s
 }
 
-type PromiseReturnType[T any] chan PromiseValue[T]
-
-func Promise[T any](cb PromiseCallback[T]) PromiseReturnType[T] {
-
-	resultchan := make(PromiseReturnType[T])
-
-	resolvefunc := func(value T) {
-		go func() {
-			resultchan <- PromiseValue[T]{Value: value}
-		}()
+func ByteCountSI(b int64) string {
+	const unit = 1000
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
 	}
-
-	rejectfunc := func(err error) {
-		go func() {
-			resultchan <- PromiseValue[T]{Error: err}
-		}()
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
 	}
-
-	go func() {
-		cb(resolvefunc, rejectfunc)
-	}()
-
-	return resultchan
-}
-
-func DoRequest(url string) PromiseReturnType[*resty.Response] {
-	return Promise(func(resolve ResolveFunc[*resty.Response], reject RejectFunc) {
-		client := resty.New()
-		res, err := client.R().
-			SetHeader("Accept", "application/json").
-			Get(url)
-
-		if err != nil {
-			resolve(res)
-		} else {
-			reject(err)
-		}
-	})
+	return fmt.Sprintf("%.1f %cB",
+		float64(b)/float64(div), "kMGTPE"[exp])
 }

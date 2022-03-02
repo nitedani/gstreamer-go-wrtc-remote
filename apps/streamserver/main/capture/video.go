@@ -1,9 +1,10 @@
-package stream
+package capture
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"server/main/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -13,68 +14,17 @@ import (
 	"github.com/tinyzimmer/go-gst/gst/app"
 )
 
-func ByteCountSI(b int64) string {
-	const unit = 1000
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB",
-		float64(b)/float64(div), "kMGTPE"[exp])
-}
-
-func remove(s []MediaChannel, i int) []MediaChannel {
-	s[i] = s[len(s)-1]
-	return s[:len(s)-1]
-}
-
-type MediaChannel struct {
-	ID      string
-	Channel chan *gst.Buffer
-	Context context.Context
-	Cancel  context.CancelFunc
-	IsDone  bool
-}
-
 var video_channels = make(map[string]*MediaChannel, 0)
-var audio_channels = make(map[string]*MediaChannel, 0)
 
 func CreateVideoCapture() func() chan *gst.Buffer {
 
-	bitrate, hasEnv := os.LookupEnv("BITRATE")
-	if !hasEnv {
-		log.Info().Msg("No bitrate specified, defaulting to 5Mbps")
-		bitrate = "5242880"
-	}
-
-	resolution, hasEnv := os.LookupEnv("RESOLUTION")
-	if !hasEnv {
-		log.Info().Msg("No resolution specified, defaulting to 1280x720")
-		resolution = "1280x720"
-	}
-	sizes := strings.Split(resolution, "x")
-
-	framerate, hasEnv := os.LookupEnv("FRAMERATE")
-	if !hasEnv {
-		log.Info().Msg("No framerate specified, defaulting to 30fps")
-		framerate = "30"
-	}
-
-	threads, hasEnv := os.LookupEnv("THREADS")
-	if !hasEnv {
-		log.Info().Msg("No threads specified, defaulting to 2")
-		threads = "2"
-	}
-
-	encoder, hasEnv := os.LookupEnv("ENCODER")
-	if !hasEnv {
-		log.Info().Msg("No encoder specified, defaulting to vp8")
-		encoder = "vp8"
-	}
+	config := utils.GetConfig()
+	framerate := config.Framerate
+	width := config.ResolutionX
+	height := config.ResolutionY
+	bitrate := config.Bitrate
+	encoder := config.Encoder
+	threads := config.Threads
 
 	frames_ch := make(chan *gst.Buffer)
 
@@ -111,7 +61,7 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"target-bitrate=" + bitrate,
 		"!",
 
-		fmt.Sprintf("video/x-vp8,framerate=%s/1,width=%s,height=%s", framerate, sizes[0], sizes[1]),
+		fmt.Sprintf("video/x-vp8,framerate=%s/1,width=%s,height=%s", framerate, width, height),
 		"!",
 
 		"appsink",
@@ -130,7 +80,7 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"d3d11download",
 		"!",
 
-		fmt.Sprintf("video/x-raw,framerate=%s/1,width=%s,height=%s", framerate, sizes[0], sizes[1]),
+		fmt.Sprintf("video/x-raw,framerate=%s/1,width=%s,height=%s", framerate, width, height),
 		"!",
 
 		"queue2",
@@ -171,7 +121,7 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		"d3d11download",
 		"!",
 
-		fmt.Sprintf("video/x-raw,format=NV12,framerate=%s/1,width=%s,height=%s", framerate, sizes[0], sizes[1]),
+		fmt.Sprintf("video/x-raw,format=NV12,framerate=%s/1,width=%s,height=%s", framerate, width, height),
 		"!",
 
 		"queue2",
@@ -229,10 +179,8 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 	go func() {
 		for {
 
-			if pipeline.GetState() != gst.StatePlaying {
+			if pipeline.GetState() != gst.StatePlaying || frames == 0 {
 				time.Sleep(time.Second)
-				frames = 0
-				buffer_len = 0
 				continue
 			}
 
@@ -284,14 +232,16 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 		for {
 			val := <-frames_ch
 			for _, channel := range video_channels {
-				if channel.IsDone {
-					return
+				if channel.IsDone || channel.Writing {
+					continue
 				}
+				channel.Writing = true
 				go func(channel *MediaChannel) {
 					select {
 					case <-channel.Context.Done():
 						return
 					case channel.Channel <- val:
+						channel.Writing = false
 						return
 					case <-time.After(time.Millisecond * 100):
 						channel.IsDone = true
@@ -306,7 +256,7 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 	return func() chan *gst.Buffer {
 		ctx, cancel := context.WithCancel(context.Background())
 
-		id := randomStr()
+		id := utils.RandomStr()
 
 		mediaChannel := MediaChannel{
 			ID:      id,
@@ -314,6 +264,7 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 			Context: ctx,
 			Cancel:  cancel,
 			IsDone:  false,
+			Writing: false,
 		}
 
 		video_channels[id] = &mediaChannel
@@ -335,155 +286,4 @@ func CreateVideoCapture() func() chan *gst.Buffer {
 
 		return mediaChannel.Channel
 	}
-}
-
-func CreateAudioCapture() func() chan *gst.Buffer {
-
-	samples_ch := make(chan *gst.Buffer)
-	pipelinearr := []string{
-		"wasapisrc",
-		"low-latency=true",
-		"loopback=true",
-		"!",
-		"audioconvert",
-		"!",
-		"queue2",
-		"max-size-buffers=0",
-		"!",
-		"opusenc",
-		"max-payload-size=1500",
-		"bitrate=128000",
-		"!",
-		"appsink",
-		"name=appsink",
-	}
-
-	pipelineString := strings.Join(pipelinearr, " ")
-
-	gst.Init(nil)
-	pipeline, err := gst.NewPipelineFromString(pipelineString)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(2)
-	}
-
-	sink_el, _ := pipeline.GetElementByName("appsink")
-
-	sink := app.SinkFromElement(sink_el)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(2)
-	}
-
-	var samples = 0
-	var buffer_len = int64(0)
-
-	go func() {
-		for {
-
-			if pipeline.GetState() != gst.StatePlaying {
-				time.Sleep(time.Second)
-				samples = 0
-				buffer_len = 0
-				continue
-			}
-
-			time.Sleep(time.Second)
-			per_buffer := buffer_len / int64(samples)
-
-			log.Info().
-				Int("audio_samplerate", samples).
-				Int("audio_samples_size_kb", int(per_buffer/1024)).
-				Int("audio_bitrate_kb", int(buffer_len/1024)).
-				Send()
-
-			samples = 0
-			buffer_len = 0
-		}
-	}()
-
-	sink.SetCallbacks(&app.SinkCallbacks{
-
-		NewSampleFunc: func(sink *app.Sink) gst.FlowReturn {
-			sample := sink.PullSample()
-			if sample == nil {
-				return gst.FlowEOS
-			}
-
-			buffer := sample.GetBuffer()
-			if buffer == nil {
-				return gst.FlowError
-			}
-
-			len := buffer.GetSize()
-
-			samples++
-			buffer_len += len
-
-			select {
-			case samples_ch <- buffer:
-				break
-			default:
-				break
-			}
-
-			return gst.FlowOK
-		},
-	})
-
-	go func() {
-		for {
-			val := <-samples_ch
-			for _, channel := range audio_channels {
-				if channel.IsDone {
-					return
-				}
-				go func(channel *MediaChannel) {
-					select {
-					case <-channel.Context.Done():
-						return
-					case channel.Channel <- val:
-						return
-					case <-time.After(time.Millisecond * 100):
-						channel.IsDone = true
-						channel.Cancel()
-					}
-				}(channel)
-			}
-		}
-	}()
-
-	return func() chan *gst.Buffer {
-		ctx, cancel := context.WithCancel(context.Background())
-
-		id := randomStr()
-
-		mediaChannel := MediaChannel{
-			ID:      id,
-			Channel: make(chan *gst.Buffer),
-			Context: ctx,
-			Cancel:  cancel,
-			IsDone:  false,
-		}
-
-		audio_channels[id] = &mediaChannel
-
-		if pipeline.GetState() != gst.StatePlaying {
-			log.Info().Int("viewers", len(audio_channels)).Msg("Starting audio capture")
-			pipeline.SetState(gst.StatePlaying)
-		}
-
-		go func() {
-			<-mediaChannel.Context.Done()
-			delete(audio_channels, id)
-			log.Info().Int("viewers", len(audio_channels)).Msg("Closing audio channel")
-			if len(audio_channels) == 0 {
-				log.Info().Msg("Pausing audio capture")
-				pipeline.SetState(gst.StatePaused)
-			}
-		}()
-
-		return mediaChannel.Channel
-	}
-
 }

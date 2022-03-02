@@ -179,6 +179,18 @@ func StartSignalingServer(g *echo.Group) {
 
 	// Server route
 	g.GET("/signal/:streamId/internal", func(c echo.Context) error {
+
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Str("method", "GET").
+					Str("streamId", c.PathParam("streamId")).
+					Str("viewerId", c.QueryParam("viewerId")).
+					Str("error", fmt.Sprint(r)).
+					Msg("server called /signal/:streamId/internal")
+			}
+		}()
+
 		streamId := c.PathParam("streamId")
 		signals_to_send := make(chan []Signal, 0)
 
@@ -223,7 +235,22 @@ func StartSignalingServer(g *echo.Group) {
 		default:
 		}
 
-		json, _ := json.Marshal(<-signals_to_send)
+		signals_to_send_obj := <-signals_to_send
+
+		//offers come before candidates
+		sortedSignals := make([]Signal, 0)
+		for _, signal := range signals_to_send_obj {
+			if signal.Type == "offer" {
+				sortedSignals = append(sortedSignals, signal)
+			}
+		}
+		for _, signal := range signals_to_send_obj {
+			if signal.Type == "candidate" {
+				sortedSignals = append(sortedSignals, signal)
+			}
+		}
+
+		json, _ := json.Marshal(sortedSignals)
 		return c.String(http.StatusOK, string(json))
 	})
 

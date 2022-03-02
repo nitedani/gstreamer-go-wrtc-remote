@@ -15,6 +15,7 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
 	github.com/mattn/go-pointer v0.0.1 // indirect
+	github.com/olebedev/emitter v0.0.0-20190110104742-e8d1457e6aee // indirect
 	github.com/otiai10/gosseract v2.2.1+incompatible // indirect
 	github.com/pion/datachannel v1.5.2 // indirect
 	github.com/pion/dtls/v2 v2.1.3 // indirect

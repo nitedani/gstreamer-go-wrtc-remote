@@ -6,7 +6,6 @@ package main
 import (
 	"os"
 	"os/signal"
-	"server/main/stream"
 	"syscall"
 
 	"github.com/joho/godotenv"
@@ -36,7 +35,7 @@ func main() {
 		godotenv.Load(envFilePath)
 	}
 
-	stream.StartWrtcServer()
+	StartWrtcServer()
 	quitChannel := make(chan os.Signal, 1)
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
 	<-quitChannel
