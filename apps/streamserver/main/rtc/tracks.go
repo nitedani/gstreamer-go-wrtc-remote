@@ -36,6 +36,15 @@ func SetupTracks(videoCapture *capture.ControlledCapture, audioCapture *capture.
 	stopped := true
 
 	sendVideo := func() {
+		/*
+			go func() {
+				subscription, _ := videoCapture.GetChannel()
+				for range subscription {
+					log.Info().Msg("V data received")
+					time.Sleep(time.Millisecond * 1000)
+				}
+			}()
+		*/
 		videoSubscription, videoCleanup := videoCapture.GetChannel()
 		for frame_buffer := range videoSubscription {
 			if stopped {

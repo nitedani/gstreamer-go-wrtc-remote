@@ -92,16 +92,17 @@ func CreateAudioCapture() *ControlledCapture {
 		Start:   start,
 		Stop:    stop,
 		GetChannel: func() (chan *gst.Buffer, func()) {
-			//FIXME: Make this consumer not block the other consumers
-
 			counter++
-			channel := make(chan *gst.Buffer)
-
+			channel := make(chan *gst.Buffer, 2)
+			writing := false
 			subscription := e.On("data", func(e *emitter.Event) {
-				select {
-				case channel <- e.Args[0].(*gst.Buffer):
-				default:
+
+				if writing {
+					return
 				}
+				writing = true
+				channel <- e.Args[0].(*gst.Buffer)
+				writing = false
 			})
 
 			cleanup := func() {

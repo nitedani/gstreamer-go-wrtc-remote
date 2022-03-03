@@ -165,12 +165,12 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 			})
 		},
 		OnDisconnected: func(cb func()) {
-			peerConnection.On("disconnected", func(e *emitter.Event) {
+			peerConnection.Once("disconnected", func(e *emitter.Event) {
 				cb()
 			})
 		},
 		OnConnected: func(cb func()) {
-			peerConnection.On("connected", func(e *emitter.Event) {
+			peerConnection.Once("connected", func(e *emitter.Event) {
 				cb()
 			})
 		},

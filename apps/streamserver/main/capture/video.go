@@ -88,7 +88,7 @@ func CreateVideoCapture() *ControlledCapture {
 	}
 
 	stop := func() {
-		pipeline.SetState(gst.StatePaused)
+		pipeline.SetState(gst.StateNull)
 	}
 
 	return &ControlledCapture{
@@ -96,24 +96,29 @@ func CreateVideoCapture() *ControlledCapture {
 		Start:   start,
 		Stop:    stop,
 		GetChannel: func() (chan *gst.Buffer, func()) {
-			//FIXME: Make this consumer not block the other consumers
-
 			counter++
 			channel := make(chan *gst.Buffer)
+			writing := false
 			subscription := e.On("data", func(e *emitter.Event) {
+
+				if writing {
+					return
+				}
+				writing = true
 				channel <- e.Args[0].(*gst.Buffer)
+				writing = false
 			})
 
 			cleanup := func() {
 				e.Off("data", subscription)
 				close(channel)
 				counter--
-				if counter == 0 {
+				if counter <= 0 {
 					stop()
 				}
 			}
 
-			if counter == 1 {
+			if counter >= 1 {
 				start()
 			}
 

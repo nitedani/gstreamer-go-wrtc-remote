@@ -28,10 +28,13 @@ func NewConnectionManager() *ConnectionManager {
 		NewConnection: func(viewerId string) *PeerConnection {
 			connection := newConnection(viewerId)
 			connections[connection.ViewerId] = connection
+			length := len(connections)
 
-			if len(connections) == 1 {
-				e.Emit("firstconnection")
-			}
+			connection.OnConnected(func() {
+				if length == 1 {
+					e.Emit("firstconnection")
+				}
+			})
 
 			connection.OnDisconnected(func() {
 				delete(connections, connection.ViewerId)

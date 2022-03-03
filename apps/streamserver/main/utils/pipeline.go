@@ -144,6 +144,11 @@ func WinNvH264Pipeline() string {
 		"bitrate=" + strconv.Itoa(bitrate_int/1024),
 		"!",
 
+		"h264parse",
+		"config-interval=-1",
+		//"update-timecode=true",
+		"!",
+
 		"appsink",
 		"name=appsink",
 	}
