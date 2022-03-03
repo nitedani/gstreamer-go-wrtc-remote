@@ -17,7 +17,7 @@ type PeerConnection struct {
 	Signal         func(signal Signal) error
 	OnConnected    func(cb func())
 	OnDisconnected func(cb func())
-	AttachTracks   func(tracks *StreamTracks)
+	AddTracks      func(tracks *Tracks)
 	*webrtc.PeerConnection
 	*emitter.Emitter
 }
@@ -85,9 +85,7 @@ func (peerConnection *PeerConnection) initializeConnection() {
 	})
 
 	peerConnection.OnConnectionStateChange(func(connectionState webrtc.PeerConnectionState) {
-		if connectionState == webrtc.PeerConnectionStateDisconnected ||
-			connectionState == webrtc.PeerConnectionStateClosed ||
-			connectionState == webrtc.PeerConnectionStateFailed {
+		if connectionState == webrtc.PeerConnectionStateDisconnected {
 			peerConnection.Close()
 			peerConnection.Emit("disconnected")
 		} else if connectionState == webrtc.PeerConnectionStateConnected {
@@ -174,7 +172,7 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 				cb()
 			})
 		},
-		AttachTracks: func(tracks *StreamTracks) {
+		AddTracks: func(tracks *Tracks) {
 			rtpSender, err := peerConnection.AddTrack(tracks.AudioTrack)
 			if err != nil {
 				panic(err)

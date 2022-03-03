@@ -15,17 +15,17 @@ func StartWrtcServer() {
 	signaling := rtc.NewSignaling()
 	connectionManager := rtc.NewConnectionManager()
 
-	videoCapture := capture.CreateVideoCapture()
-	audioCapture := capture.CreateAudioCapture()
+	videoCapture := capture.NewVideoCapture()
+	audioCapture := capture.NewAudioCapture()
 
-	tracks := rtc.SetupTracks(videoCapture, audioCapture)
+	trackWriter := rtc.NewTrackWriter(videoCapture, audioCapture)
 
 	connectionManager.OnFirstConnection(func() {
-		tracks.Start()
+		trackWriter.Start()
 	})
 
 	connectionManager.OnAllDisconnected(func() {
-		tracks.Stop()
+		trackWriter.Stop()
 	})
 
 	signaling.OnSignal(func(signal rtc.Signal) {
@@ -34,12 +34,16 @@ func StartWrtcServer() {
 
 		if connection == nil {
 
-			log.Info().Str("viewerId", viewerId).Msg("Connected")
-
 			connection = connectionManager.NewConnection(viewerId)
-			connection.AttachTracks(tracks.StreamTracks)
+
+			connection.AddTracks(trackWriter.Tracks)
+
 			connection.OnSignal(func(_signal rtc.Signal) {
 				signaling.Signal(_signal)
+			})
+
+			connection.OnConnected(func() {
+				log.Info().Str("viewerId", viewerId).Msg("Connected")
 			})
 
 			connection.OnDisconnected(func() {

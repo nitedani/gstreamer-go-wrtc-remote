@@ -1,6 +1,8 @@
 package rtc
 
-import "github.com/olebedev/emitter"
+import (
+	"github.com/olebedev/emitter"
+)
 
 type ConnectionManager struct {
 	connections       map[string]*PeerConnection
@@ -16,6 +18,7 @@ func NewConnectionManager() *ConnectionManager {
 	var connections = make(map[string]*PeerConnection)
 	e := &emitter.Emitter{}
 	e.Use("*", emitter.Void)
+	numConnections := 0
 
 	return &ConnectionManager{
 		connections: connections,
@@ -28,17 +31,18 @@ func NewConnectionManager() *ConnectionManager {
 		NewConnection: func(viewerId string) *PeerConnection {
 			connection := newConnection(viewerId)
 			connections[connection.ViewerId] = connection
-			length := len(connections)
 
 			connection.OnConnected(func() {
-				if length == 1 {
+				numConnections++
+				if numConnections == 1 {
 					e.Emit("firstconnection")
 				}
 			})
 
 			connection.OnDisconnected(func() {
+				numConnections--
 				delete(connections, connection.ViewerId)
-				if len(connections) == 0 {
+				if numConnections == 0 {
 					e.Emit("alldisconnected")
 				}
 			})

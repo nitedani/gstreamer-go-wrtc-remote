@@ -8,18 +8,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type StreamTracks struct {
+type Tracks struct {
 	VideoTrack *webrtc.TrackLocalStaticSample
 	AudioTrack *webrtc.TrackLocalStaticSample
 }
 
 type SetupTracksReturnType struct {
-	StreamTracks *StreamTracks
-	Start        func()
-	Stop         func()
+	Tracks *Tracks
+	Start  func()
+	Stop   func()
 }
 
-func SetupTracks(videoCapture *capture.ControlledCapture, audioCapture *capture.ControlledCapture) SetupTracksReturnType {
+func NewTrackWriter(videoCapture *capture.ControlledCapture, audioCapture *capture.ControlledCapture) SetupTracksReturnType {
 
 	config := GetRtcConfig()
 
@@ -36,15 +36,7 @@ func SetupTracks(videoCapture *capture.ControlledCapture, audioCapture *capture.
 	stopped := true
 
 	sendVideo := func() {
-		/*
-			go func() {
-				subscription, _ := videoCapture.GetChannel()
-				for range subscription {
-					log.Info().Msg("V data received")
-					time.Sleep(time.Millisecond * 1000)
-				}
-			}()
-		*/
+
 		videoSubscription, videoCleanup := videoCapture.GetChannel()
 		for frame_buffer := range videoSubscription {
 			if stopped {
@@ -52,8 +44,7 @@ func SetupTracks(videoCapture *capture.ControlledCapture, audioCapture *capture.
 				return
 			}
 
-			copied := frame_buffer.DeepCopy()
-			err = videoTrack.WriteSample(media.Sample{Data: copied.Bytes(), Duration: copied.Duration()})
+			err = videoTrack.WriteSample(media.Sample{Data: frame_buffer.Bytes(), Duration: frame_buffer.Duration()})
 			if err != nil {
 				log.Err(err).Send()
 				videoCleanup()
@@ -69,8 +60,8 @@ func SetupTracks(videoCapture *capture.ControlledCapture, audioCapture *capture.
 				audioCleanup()
 				return
 			}
-			copied := sample_buffer.DeepCopy()
-			err = audioTrack.WriteSample(media.Sample{Data: copied.Bytes(), Duration: copied.Duration()})
+
+			err = audioTrack.WriteSample(media.Sample{Data: sample_buffer.Bytes(), Duration: sample_buffer.Duration()})
 			if err != nil {
 				log.Err(err).Send()
 				audioCleanup()
@@ -92,7 +83,7 @@ func SetupTracks(videoCapture *capture.ControlledCapture, audioCapture *capture.
 	}
 
 	return SetupTracksReturnType{
-		StreamTracks: &StreamTracks{
+		Tracks: &Tracks{
 			VideoTrack: videoTrack,
 			AudioTrack: audioTrack,
 		},

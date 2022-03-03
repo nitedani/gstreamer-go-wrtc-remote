@@ -12,7 +12,7 @@ import (
 	"github.com/tinyzimmer/go-gst/gst/app"
 )
 
-func CreateVideoCapture() *ControlledCapture {
+func NewVideoCapture() *ControlledCapture {
 	counter := 0
 	config := utils.GetMediaConfig()
 	e := &emitter.Emitter{}
@@ -59,9 +59,7 @@ func CreateVideoCapture() *ControlledCapture {
 	}()
 
 	sink.SetCallbacks(&app.SinkCallbacks{
-
 		NewSampleFunc: func(sink *app.Sink) gst.FlowReturn {
-
 			sample := sink.PullSample()
 			if sample == nil {
 				return gst.FlowEOS
@@ -99,8 +97,8 @@ func CreateVideoCapture() *ControlledCapture {
 			counter++
 			channel := make(chan *gst.Buffer)
 			writing := false
-			subscription := e.On("data", func(e *emitter.Event) {
 
+			subscription := e.On("data", func(e *emitter.Event) {
 				if writing {
 					return
 				}

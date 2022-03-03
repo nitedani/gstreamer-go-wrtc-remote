@@ -11,7 +11,7 @@ import (
 	"github.com/tinyzimmer/go-gst/gst/app"
 )
 
-func CreateAudioCapture() *ControlledCapture {
+func NewAudioCapture() *ControlledCapture {
 	counter := 0
 	config := utils.GetMediaConfig()
 	e := &emitter.Emitter{}
@@ -56,7 +56,6 @@ func CreateAudioCapture() *ControlledCapture {
 	}()
 
 	sink.SetCallbacks(&app.SinkCallbacks{
-
 		NewSampleFunc: func(sink *app.Sink) gst.FlowReturn {
 			sample := sink.PullSample()
 			if sample == nil {
@@ -96,7 +95,6 @@ func CreateAudioCapture() *ControlledCapture {
 			channel := make(chan *gst.Buffer, 2)
 			writing := false
 			subscription := e.On("data", func(e *emitter.Event) {
-
 				if writing {
 					return
 				}

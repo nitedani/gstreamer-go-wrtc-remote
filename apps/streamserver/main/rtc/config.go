@@ -1,7 +1,7 @@
 package rtc
 
 import (
-	"os"
+	"server/main/utils"
 
 	"github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog/log"
@@ -13,16 +13,10 @@ type RtcConfig struct {
 }
 
 func GetRtcConfig() RtcConfig {
-
-	encoder, hasEnv := os.LookupEnv("ENCODER")
-	if !hasEnv {
-		log.Info().Msg("No encoder specified, defaulting to vp8")
-		encoder = "vp8"
-	}
+	config := utils.GetConfig()
 
 	var videoMimeType string
-
-	switch encoder {
+	switch config.Encoder {
 	case "vp8":
 		videoMimeType = webrtc.MimeTypeVP8
 	case "h264":
@@ -32,9 +26,7 @@ func GetRtcConfig() RtcConfig {
 	default:
 		log.Fatal().Msg("Invalid encoder specified")
 	}
-
 	audioMimeType := webrtc.MimeTypeOpus
-
 	return RtcConfig{
 
 		VideoMimeType: videoMimeType,
