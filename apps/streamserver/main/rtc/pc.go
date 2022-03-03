@@ -17,8 +17,9 @@ type PeerConnection struct {
 	Signal         func(signal Signal) error
 	OnConnected    func(cb func())
 	OnDisconnected func(cb func())
+	AttachTracks   func(tracks *StreamTracks)
 	*webrtc.PeerConnection
-	e *emitter.Emitter
+	*emitter.Emitter
 }
 type ICEServer struct {
 	URLs           []string    `json:"urls"`
@@ -73,7 +74,7 @@ func (peerConnection *PeerConnection) initializeConnection() {
 			Type:      "candidate",
 			Candidate: json,
 		}
-		peerConnection.e.Emit("signal", signal)
+		peerConnection.Emit("signal", signal)
 	})
 
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -88,15 +89,14 @@ func (peerConnection *PeerConnection) initializeConnection() {
 			connectionState == webrtc.PeerConnectionStateClosed ||
 			connectionState == webrtc.PeerConnectionStateFailed {
 			peerConnection.Close()
-			peerConnection.e.Emit("disconnected")
+			peerConnection.Emit("disconnected")
 		} else if connectionState == webrtc.PeerConnectionStateConnected {
-			peerConnection.e.Emit("connected")
+			peerConnection.Emit("connected")
 		}
 	})
-
 }
 
-func (peerConnection PeerConnection) applyOffer(signal Signal) (*Signal, error) {
+func (peerConnection *PeerConnection) applyOffer(signal Signal) (*Signal, error) {
 
 	if err := peerConnection.SetRemoteDescription(webrtc.SessionDescription{SDP: signal.SDP, Type: webrtc.SDPTypeOffer}); err != nil {
 		log.Err(err).Send()
@@ -129,7 +129,7 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 
 	initialized := false
 	peerConnection = &PeerConnection{
-		e:        e,
+		Emitter:  e,
 		ViewerId: viewerId,
 		Signal: func(signal Signal) error {
 			switch signal.Type {
@@ -165,14 +165,27 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 			})
 		},
 		OnDisconnected: func(cb func()) {
-			e.On("disconnected", func(e *emitter.Event) {
+			peerConnection.On("disconnected", func(e *emitter.Event) {
 				cb()
 			})
 		},
 		OnConnected: func(cb func()) {
-			e.On("connected", func(e *emitter.Event) {
+			peerConnection.On("connected", func(e *emitter.Event) {
 				cb()
 			})
+		},
+		AttachTracks: func(tracks *StreamTracks) {
+			rtpSender, err := peerConnection.AddTrack(tracks.AudioTrack)
+			if err != nil {
+				panic(err)
+			}
+			processRTCP(rtpSender)
+
+			rtpSender, err = peerConnection.AddTrack(tracks.VideoTrack)
+			if err != nil {
+				panic(err)
+			}
+			processRTCP(rtpSender)
 		},
 		PeerConnection: nil,
 	}

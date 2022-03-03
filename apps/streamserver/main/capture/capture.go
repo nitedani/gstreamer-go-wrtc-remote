@@ -1,16 +1,13 @@
 package capture
 
 import (
-	"context"
-
+	"github.com/olebedev/emitter"
 	"github.com/tinyzimmer/go-gst/gst"
 )
 
-type MediaChannel struct {
-	ID      string
-	Channel chan *gst.Buffer
-	Context context.Context
-	Cancel  context.CancelFunc
-	IsDone  bool
-	Writing bool
+type ControlledCapture struct {
+	*emitter.Emitter
+	GetChannel func() (channel chan *gst.Buffer, cleanup func())
+	Start      func()
+	Stop       func()
 }

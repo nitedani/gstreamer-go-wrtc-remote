@@ -1,44 +1,23 @@
 package capture
 
 import (
-	"context"
 	"os"
 	"server/main/utils"
-	"strings"
 	"time"
 
+	"github.com/olebedev/emitter"
 	"github.com/rs/zerolog/log"
 	"github.com/tinyzimmer/go-gst/gst"
 	"github.com/tinyzimmer/go-gst/gst/app"
 )
 
-var audio_channels = make(map[string]*MediaChannel, 0)
-
-func CreateAudioCapture() func() chan *gst.Buffer {
-
-	samples_ch := make(chan *gst.Buffer)
-	pipelinearr := []string{
-		"wasapisrc",
-		"low-latency=true",
-		"loopback=true",
-		"!",
-		"audioconvert",
-		"!",
-		"queue2",
-		"max-size-buffers=0",
-		"!",
-		"opusenc",
-		"max-payload-size=1500",
-		"bitrate=128000",
-		"!",
-		"appsink",
-		"name=appsink",
-	}
-
-	pipelineString := strings.Join(pipelinearr, " ")
-
+func CreateAudioCapture() *ControlledCapture {
+	counter := 0
+	config := utils.GetMediaConfig()
+	e := &emitter.Emitter{}
+	e.Use("*", emitter.Void)
 	gst.Init(nil)
-	pipeline, err := gst.NewPipelineFromString(pipelineString)
+	pipeline, err := gst.NewPipelineFromString(config.AudioPipeline)
 	if err != nil {
 		log.Err(err).Msg("Failed to create pipeline")
 		os.Exit(2)
@@ -94,73 +73,51 @@ func CreateAudioCapture() func() chan *gst.Buffer {
 			samples++
 			buffer_len += len
 
-			select {
-			case samples_ch <- buffer:
-				break
-			default:
-				break
-			}
+			e.Emit("data", buffer)
 
 			return gst.FlowOK
 		},
 	})
 
-	go func() {
-		for {
-			val := <-samples_ch
-			for _, channel := range audio_channels {
-				if channel.IsDone || channel.Writing {
-					continue
-				}
-				channel.Writing = true
-				go func(channel *MediaChannel) {
-					select {
-					case <-channel.Context.Done():
-						return
-					case channel.Channel <- val:
-						channel.Writing = false
-						return
-					case <-time.After(time.Millisecond * 100):
-						channel.IsDone = true
-						channel.Cancel()
-					}
-				}(channel)
-			}
-		}
-	}()
-
-	return func() chan *gst.Buffer {
-		ctx, cancel := context.WithCancel(context.Background())
-
-		id := utils.RandomStr()
-
-		mediaChannel := MediaChannel{
-			ID:      id,
-			Channel: make(chan *gst.Buffer),
-			Context: ctx,
-			Cancel:  cancel,
-			IsDone:  false,
-			Writing: false,
-		}
-
-		audio_channels[id] = &mediaChannel
-
-		if pipeline.GetState() != gst.StatePlaying {
-			log.Info().Int("viewers", len(audio_channels)).Msg("Starting audio capture")
-			pipeline.SetState(gst.StatePlaying)
-		}
-
-		go func() {
-			<-mediaChannel.Context.Done()
-			delete(audio_channels, id)
-			log.Info().Int("viewers", len(audio_channels)).Msg("Closing audio channel")
-			if len(audio_channels) == 0 {
-				log.Info().Msg("Pausing audio capture")
-				pipeline.SetState(gst.StatePaused)
-			}
-		}()
-
-		return mediaChannel.Channel
+	start := func() {
+		pipeline.SetState(gst.StatePlaying)
 	}
 
+	stop := func() {
+		pipeline.SetState(gst.StatePaused)
+	}
+
+	return &ControlledCapture{
+		Emitter: e,
+		Start:   start,
+		Stop:    stop,
+		GetChannel: func() (chan *gst.Buffer, func()) {
+			//FIXME: Make this consumer not block the other consumers
+
+			counter++
+			channel := make(chan *gst.Buffer)
+
+			subscription := e.On("data", func(e *emitter.Event) {
+				select {
+				case channel <- e.Args[0].(*gst.Buffer):
+				default:
+				}
+			})
+
+			cleanup := func() {
+				e.Off("data", subscription)
+				close(channel)
+				counter--
+				if counter == 0 {
+					stop()
+				}
+			}
+
+			if counter == 1 {
+				start()
+			}
+
+			return channel, cleanup
+		},
+	}
 }

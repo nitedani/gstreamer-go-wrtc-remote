@@ -12,17 +12,20 @@ import (
 func StartWrtcServer() {
 
 	config := utils.GetConfig()
-
-	connectionManager := rtc.NewConnectionManager()
 	signaling := rtc.NewSignaling()
-	tracks := rtc.SetupTracks(capture.CreateVideoCapture(), capture.CreateAudioCapture())
+	connectionManager := rtc.NewConnectionManager()
 
-	connectionManager.OnAllDisconnected(func() {
-		tracks.Stop()
-	})
+	videoCapture := capture.CreateVideoCapture()
+	audioCapture := capture.CreateAudioCapture()
+
+	tracks := rtc.SetupTracks(videoCapture, audioCapture)
 
 	connectionManager.OnFirstConnection(func() {
 		tracks.Start()
+	})
+
+	connectionManager.OnAllDisconnected(func() {
+		tracks.Stop()
 	})
 
 	signaling.OnSignal(func(signal rtc.Signal) {
@@ -34,7 +37,7 @@ func StartWrtcServer() {
 			log.Info().Str("viewerId", viewerId).Msg("Connected")
 
 			connection = connectionManager.NewConnection(viewerId)
-			rtc.AttachTracks(connection, tracks.StreamTracks)
+			connection.AttachTracks(tracks.StreamTracks)
 			connection.OnSignal(func(_signal rtc.Signal) {
 				signaling.Signal(_signal)
 			})

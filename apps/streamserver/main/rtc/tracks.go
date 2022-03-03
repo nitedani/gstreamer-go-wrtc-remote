@@ -1,12 +1,11 @@
 package rtc
 
 import (
-	"os"
+	"server/main/capture"
 
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/rs/zerolog/log"
-	"github.com/tinyzimmer/go-gst/gst"
 )
 
 type StreamTracks struct {
@@ -20,62 +19,52 @@ type SetupTracksReturnType struct {
 	Stop         func()
 }
 
-func SetupTracks(getVideoChannelFn func() chan *gst.Buffer, getAudioChannelFn func() chan *gst.Buffer) SetupTracksReturnType {
-	encoder, hasEnv := os.LookupEnv("ENCODER")
-	if !hasEnv {
-		encoder = "vp8"
-	}
+func SetupTracks(videoCapture *capture.ControlledCapture, audioCapture *capture.ControlledCapture) SetupTracksReturnType {
 
-	var videoEncoder string
+	config := GetRtcConfig()
 
-	switch encoder {
-	case "vp8":
-		videoEncoder = webrtc.MimeTypeVP8
-	case "vp9":
-		videoEncoder = webrtc.MimeTypeVP9
-	case "h264":
-	case "nvenc":
-		videoEncoder = webrtc.MimeTypeH264
-	default:
-		panic("Invalid encoder")
-	}
-
-	videoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: videoEncoder, ClockRate: 90000}, "video", "pion")
+	videoTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: config.VideoMimeType, ClockRate: 90000}, "video", "pion")
 	if err != nil {
 		panic(err)
 	}
 
-	audioTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000}, "audio", "pion")
+	audioTrack, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: config.AudioMimeType, ClockRate: 48000}, "audio", "pion")
 	if err != nil {
 		panic(err)
 	}
 
 	stopped := true
+
 	sendVideo := func() {
-		channel := getVideoChannelFn()
-		for frame_buffer := range channel {
+		videoSubscription, videoCleanup := videoCapture.GetChannel()
+		for frame_buffer := range videoSubscription {
 			if stopped {
+				videoCleanup()
 				return
 			}
+
 			copied := frame_buffer.DeepCopy()
 			err = videoTrack.WriteSample(media.Sample{Data: copied.Bytes(), Duration: copied.Duration()})
 			if err != nil {
 				log.Err(err).Send()
+				videoCleanup()
 				return
 			}
 		}
 	}
 
 	sendAudio := func() {
-		channel := getAudioChannelFn()
-		for sample_buffer := range channel {
+		audioSubscription, audioCleanup := audioCapture.GetChannel()
+		for sample_buffer := range audioSubscription {
 			if stopped {
+				audioCleanup()
 				return
 			}
 			copied := sample_buffer.DeepCopy()
 			err = audioTrack.WriteSample(media.Sample{Data: copied.Bytes(), Duration: copied.Duration()})
 			if err != nil {
 				log.Err(err).Send()
+				audioCleanup()
 				return
 			}
 		}
@@ -102,20 +91,6 @@ func SetupTracks(getVideoChannelFn func() chan *gst.Buffer, getAudioChannelFn fu
 		Stop:  stop,
 	}
 
-}
-
-func AttachTracks(peerConnection *PeerConnection, tracks *StreamTracks) {
-	rtpSender, err := peerConnection.AddTrack(tracks.AudioTrack)
-	if err != nil {
-		panic(err)
-	}
-	processRTCP(rtpSender)
-
-	rtpSender, err = peerConnection.AddTrack(tracks.VideoTrack)
-	if err != nil {
-		panic(err)
-	}
-	processRTCP(rtpSender)
 }
 
 func processRTCP(rtpSender *webrtc.RTPSender) {

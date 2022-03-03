@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,6 +20,14 @@ type Config struct {
 	Framerate       string
 	Threads         string
 	Encoder         string
+}
+
+type MediaConfig struct {
+	Config
+	VideoPipeline string
+	AudioPipeline string
+	VideoMimeType string
+	AudioMimeType string
 }
 
 var config *Config
@@ -96,4 +105,36 @@ func GetConfig() Config {
 		initConfig()
 	}
 	return *config
+}
+
+func GetMediaConfig() MediaConfig {
+
+	config := GetConfig()
+	var videoPipeline string
+	var videoMimeType string
+
+	switch config.Encoder {
+	case "vp8":
+		videoPipeline = WinVP8Pipeline()
+		videoMimeType = webrtc.MimeTypeVP8
+	case "h264":
+		videoPipeline = WinOpenH264Pipeline()
+		videoMimeType = webrtc.MimeTypeH264
+	case "nvenc":
+		videoPipeline = WinNvH264Pipeline()
+		videoMimeType = webrtc.MimeTypeH264
+	default:
+		log.Fatal().Msg("Invalid encoder specified")
+	}
+
+	audioPipeline := WinOpusPipeline()
+	audioMimeType := webrtc.MimeTypeOpus
+
+	return MediaConfig{
+		Config:        config,
+		VideoPipeline: videoPipeline,
+		AudioPipeline: audioPipeline,
+		VideoMimeType: videoMimeType,
+		AudioMimeType: audioMimeType,
+	}
 }
