@@ -19,7 +19,7 @@ func WinVP8Pipeline() string {
 	pipelinearr_vp8 := []string{
 		"d3d11screencapturesrc",
 		"monitor-index=0",
-		"show-cursor=0",
+		//"show-cursor=0",
 		"!",
 
 		"d3d11convert",
@@ -67,7 +67,7 @@ func WinOpenH264Pipeline() string {
 	pipelinearr_openh264 := []string{
 		"d3d11screencapturesrc",
 		"monitor-index=0",
-		"show-cursor=0",
+		//"show-cursor=0",
 		"!",
 
 		"d3d11convert",
@@ -117,7 +117,7 @@ func WinNvH264Pipeline() string {
 	pipelinearr_nvenc := []string{
 		"d3d11screencapturesrc",
 		"monitor-index=0",
-		"show-cursor=0",
+		//"show-cursor=0",
 		"!",
 
 		"d3d11convert",

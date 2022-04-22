@@ -51,8 +51,10 @@ func NewConnectionManager() *ConnectionManager {
 			return connection
 		},
 		RemoveConnection: func(connectionId string) {
-			connections[connectionId].Close()
-			delete(connections, connectionId)
+			if connections[connectionId] != nil {
+				connections[connectionId].Close()
+				delete(connections, connectionId)
+			}
 		},
 		OnAllDisconnected: func(cb func()) {
 			e.On("alldisconnected", func(e *emitter.Event) {

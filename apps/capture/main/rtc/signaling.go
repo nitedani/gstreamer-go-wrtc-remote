@@ -22,6 +22,14 @@ type Signaling struct {
 	OnSignal func(cb func(signal Signal))
 }
 
+func Initialize() {
+	config := utils.GetConfig()
+	client := resty.New()
+	client.R().
+		Post(fmt.Sprintf("%s/connect/%s/internal", config.SignalingServer, config.StreamId))
+	log.Info().Str("streamId", config.StreamId).Msg("Connected")
+}
+
 func SendSignals(outgoing_signal_chan chan Signal) {
 	config := utils.GetConfig()
 	client := resty.New()
@@ -69,6 +77,7 @@ func PollSignals() chan Signal {
 }
 
 func NewSignaling() *Signaling {
+	Initialize()
 	outgoing_signal_chan := make(chan Signal, 100)
 	go SendSignals(outgoing_signal_chan)
 	signalsChan := PollSignals()
