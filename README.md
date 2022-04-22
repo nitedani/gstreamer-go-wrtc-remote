@@ -1,59 +1,60 @@
-## High performance, low latency screen sharing/remote control in go/react
+## Low latency live streaming/remote control in go/react
 
 ### Languages/libraries used:
 
-- webapp: react
-- streamserver: go
-- signalserver: go
+- Webapp: react
+- Server: go
+- Capture client: go
 
-### OS checklist
+### Encoders
 
-- [x] Windows
-- [ ] Linux
-- [ ] Mac
+- VP8
+- OpenH264
+- NVENC H264
 
-### Encoder checklist
+### Features
 
-- [x] VP8
-- [x] OpenH264
-- [x] NVENC H264
-- [ ] X264
-- [ ] QuickSync
-- [ ] AMF
-
-### Feature checklist
-
-- [x] Video
-- [x] Audio
-- [x] Remote mouse
-- [x] Remote keyboard
-- [x] Collaborative control
-- [ ] Remote clipboard
-- [ ] Drag-n-drop file transfer
-- [ ] Centralized, deployable SFU service
+- Video - 4K120 (using the nvenc encoder)
+- Audio
+- Remote control (work in progress)
 
 ## How it works:
 
-Streamserver:
+Capture client:
 
-- captures the desktop and audio, sends them to the viewers
-- receives control commands from the viewers
+- this is a windows executable
+- captures the desktop and audio, sends them to the server/viewers(depending on the server `DIRECT_CONNECT` mode)
+- receives control commands from the server/viewers
 
-Signalserver:
+Server:
 
+- windows, linux executable or docker image
 - serves the webapp static files
-- used to establish the webrtc connection between streamserver and the viewers
-- needs to be accessable by both the streamserver and the browser
+- needs to be reachable by both the capture client and the browser
+- it can run in two modes:
+  - `DIRECT_CONNECT=true` - peer to peer, the viewers connect directly to the capture client. In this mode, no video/audio goes through the server. The server only helps to estabilish the connection between the peers. The capture client(s) seperately send data to each viewer(higher upload bandwidth usage on the capture client, lower latency)
+  - `DIRECT_CONNECT=false`(default) - the server acts as a forwarding unit, only one connection is maintained for each active(has viewers) capture client(lower bandwidth usage, higher latency, higher server cpu usage)
 
-## Setting up the signalserver:
+## Setting up the server:
 
-1. Edit signalserver-win64/config
-2. Run signalserver-win64.exe
+### A. Using docker:
 
-Example signalserver config:
+`docker run --pull always --network host nitedani/gstreamer-go-wrtc-remote:latest`
+
+The server will be listening on :4000.
+
+### B. Using the executables:
+
+1. Edit server-linux64/config or server-win64/config
+2. Run server-linux64 or server-win64.exe
+
+Default server config:
+
+The server respects the host environment variables over the configuration.
 
 ```
 PORT=4000
+DIRECT_CONNECT=false
 STUN_SERVER_URL=stun:stun.l.google.com:19302
 STUN_SERVER_USERNAME=
 STUN_SERVER_PASSWORD=
@@ -62,29 +63,31 @@ TURN_SERVER_USERNAME=
 TURN_SERVER_PASSWORD=
 ```
 
-## Setting up the streamserver:
+#
 
-1. Edit streamserver-win64/config
-2. Run streamserver-win64.exe
+## Setting up the capture client:
 
-Example streamserver config:
+1. Edit client-win64/config
+2. Run client-win64.exe
+
+Default capture client config:
+
+The server respects the host environment variables over the configuration.
 
 ```
-SIGNAL_SERVER_URL=http://localhost:4000/api
+SERVER_URL=http://localhost:4000/api
 STREAM_ID=default
-REMOTE_ENABLED=true
-BITRATE=15388600
+REMOTE_ENABLED=false
+BITRATE=10485760
 RESOLUTION=1920x1080
-FRAMERATE=90
+FRAMERATE=60
 THREADS=4
-#ENCODER=h264
-#ENCODER=vp8
-ENCODER=nvenc
+ENCODER=nvenc # best, but only for nvidia
+#ENCODER=vp8  # second best
+#ENCODER=h264 # it's ok
 ```
 
-The stream is available on: http://{signalserver url}?streamId={STREAM_ID}
-
-![](/docs/1.png)
+With the configuration above, the stream is available on: http://localhost:4000?streamId=default
 
 ## Development:
 
@@ -98,9 +101,9 @@ Requirements: same as build requirements
 
 this command:
 
-- starts the streamserver
-- starts the signalserver, listening on port 4000
-- starts the webpack devserver for the webapp on port 3000, redirects /api calls to localhost:4000(signalserver)
+- starts the capture client
+- starts the server, listening on port 4000
+- starts the webpack devserver for the webapp on port 3000, redirects /api calls to localhost:4000(server)
 - opens the browser on `http://localhost:3000/?streamId=default`
 
 The result should be similar:
@@ -116,7 +119,7 @@ Requirements:
 - go 1.18
 
 1. `npm i`
-2. `npm run build` produces binaries with sample config in /dist
+2. `npm run build` produces binaries and config files in /dist
 
 How to install chocolatey:
 

@@ -235,6 +235,19 @@ export GO_ENV=release
   chmodSync(scriptPath, '0777');
   await exec(
     [
+      'chmod',
+      '755',
+      scriptPath,
+
+      '&&',
+
+      'chmod',
+      '-R',
+      '755',
+      TMPpath,
+
+      '&&',
+
       makeselfPath,
       '--notemp',
       //Server file + webapp
