@@ -32,7 +32,7 @@ Server:
 - serves the webapp static files
 - needs to be reachable by both the capture client and the browser
 - it can run in two modes:
-  - `DIRECT_CONNECT=true` - peer to peer, the viewers connect directly to the capture client. In this mode, no video/audio goes through the server. The server only helps to estabilish the connection between the peers. The capture client(s) seperately send data to each viewer(higher upload bandwidth usage on the capture client, lower latency)
+  - `DIRECT_CONNECT=true` - peer to peer, the viewers connect directly to the capture client. In this mode, no video/audio goes through the server. The server only helps to establish the connection between the peers. The capture client(s) seperately send data to each viewer(higher upload bandwidth usage on the capture client, lower latency)
   - `DIRECT_CONNECT=false`(default) - the server acts as a forwarding unit, only one connection is maintained for each active(has viewers) capture client(lower bandwidth usage, higher latency, higher server cpu usage)
 
 ## Setting up the server:
