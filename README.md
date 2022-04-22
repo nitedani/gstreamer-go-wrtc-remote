@@ -50,7 +50,7 @@ The server will be listening on :4000.
 
 Default server config:
 
-The server respects the host environment variables over the configuration.
+The server respects the host environment variables over the config file.
 
 ```
 PORT=4000
@@ -72,7 +72,7 @@ TURN_SERVER_PASSWORD=
 
 Default capture client config:
 
-The server respects the host environment variables over the configuration.
+The capture client respects the host environment variables over the config file.
 
 ```
 SERVER_URL=http://localhost:4000/api
