@@ -1,8 +1,8 @@
 package capture
 
 import (
+	"capture/main/utils"
 	"os"
-	"server/main/utils"
 	"time"
 
 	"github.com/olebedev/emitter"

@@ -1,9 +1,9 @@
 package rtc
 
 import (
+	"capture/main/utils"
 	"fmt"
 	"os"
-	"server/main/utils"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/olebedev/emitter"
@@ -29,9 +29,9 @@ type ICEServer struct {
 }
 
 func (peerConnection *PeerConnection) initializeConnection() {
-	signalingServer, hasEnv := os.LookupEnv("SIGNAL_SERVER_URL")
+	signalingServer, hasEnv := os.LookupEnv("SERVER_URL")
 	if !hasEnv {
-		panic("SIGNAL_SERVER_URL not set")
+		panic("SERVER_URL not set")
 	}
 
 	//Get ice server config from the signalserver
@@ -139,23 +139,26 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 				}
 				e.Emit("signal", *answerSignal)
 				initialized = true
-
+			case "answer":
+				if err := peerConnection.SetRemoteDescription(webrtc.SessionDescription{SDP: signal.SDP, Type: webrtc.SDPTypeOffer}); err != nil {
+					log.Err(err).Send()
+					return err
+				}
+				initialized = true
 			case "candidate":
 				if !initialized {
 					log.Warn().
 						Str("viewerId", signal.ViewerId).
-						Msg("Received candidate before offer, ignoring")
+						Msg("capture received candidate before offer, ignoring")
 
-					return fmt.Errorf("Received candidate before offer")
+					return fmt.Errorf("received candidate before offer")
 				}
 				if err := peerConnection.AddICECandidate(signal.Candidate); err != nil {
 					log.Err(err).Send()
 					return err
 				}
-
 			}
 			return nil
-
 		},
 		OnSignal: func(cb func(signal Signal)) {
 			e.On("signal", func(e *emitter.Event) {

@@ -1,16 +1,19 @@
 {
   "folders": [
     {
+      "name": "go-gstreamer",
       "path": "."
     },
     {
+      "name": "webapp",
       "path": "apps\\webapp"
     },
     {
-      "path": "apps\\signalserver"
+      "name": "capture",
+      "path": "apps\\capture"
     },
     {
-      "path": "apps\\streamserver"
+      "path": "apps\\server"
     }
   ],
   "settings": {}

@@ -1,7 +1,7 @@
 package rtc
 
 import (
-	"server/main/capture"
+	"capture/main/capture"
 
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"

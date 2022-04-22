@@ -3,39 +3,36 @@ const chokidar = require('chokidar');
 const { spawn, exec } = require('child_process');
 const colorette = require('colorette');
 
-let cpStreamServer = null;
-let cpSignalingServer = null;
+let cpCapture = null;
+let cpServer = null;
 const baseDir = resolve(__dirname, '..');
-const streamServerDir = join(baseDir, 'apps', 'streamserver');
-const signalingServerDir = join(baseDir, 'apps', 'signalserver');
+const captureDir = join(baseDir, 'apps', 'capture');
+const serverDir = join(baseDir, 'apps', 'server');
 
-const spawnStreamServer = () => {
+const spawnCapture = () => {
   console.log(colorette.blueBright('Building stream server...'));
   const buildEnv = {
     CGO_ENABLED: 1,
-    CGO_CFLAGS: `-I${streamServerDir}\\gstreamer\\include`,
-    CGO_LDFLAGS: `-L${streamServerDir}\\gstreamer\\lib`,
-    PKG_CONFIG_PATH: `${streamServerDir}\\gstreamer\\lib\\pkgconfig`,
+    CGO_CFLAGS: `-I${captureDir}\\gstreamer\\include`,
+    CGO_LDFLAGS: `-L${captureDir}\\gstreamer\\lib`,
+    PKG_CONFIG_PATH: `${captureDir}\\gstreamer\\lib\\pkgconfig`,
   };
 
   const runtimeEnv = {
-    GST_PLUGIN_PATH_1_0: `${streamServerDir}\\gstreamer\\dll\\plugins`,
-    PATH: `${streamServerDir}\\gstreamer\\dll\\dll;${process.env.PATH}`,
+    GST_PLUGIN_PATH_1_0: `${captureDir}\\gstreamer\\dll\\plugins`,
+    PATH: `${captureDir}\\gstreamer\\dll\\dll;${process.env.PATH}`,
   };
 
-  if (cpStreamServer) {
-    cpStreamServer.kill('SIGTERM');
-    cpStreamServer = null;
+  if (cpCapture) {
+    cpCapture.kill('SIGTERM');
+    cpCapture = null;
   }
 
   const binPath = join(baseDir, 'dist', 'stream.exe');
-  const builder = exec(
-    `cd ${streamServerDir}\\main && go build -v -o ${binPath}`,
-    {
-      stdio: 'inherit',
-      env: { ...process.env, ...buildEnv },
-    },
-  );
+  const builder = exec(`cd ${captureDir}\\main && go build -v -o ${binPath}`, {
+    stdio: 'inherit',
+    env: { ...process.env, ...buildEnv },
+  });
 
   builder.stdout.pipe(process.stdout);
   builder.stderr.pipe(process.stderr);
@@ -45,8 +42,8 @@ const spawnStreamServer = () => {
       if (code !== 0) {
         return;
       }
-      console.log(colorette.blueBright('Starting stream server...'));
-      cpStreamServer = spawn(binPath, [`${streamServerDir}\\.env`], {
+      console.log(colorette.blueBright('Starting capture...'));
+      cpCapture = spawn(binPath, [`${captureDir}\\.env`], {
         stdio: 'inherit',
         env: { ...process.env, ...runtimeEnv },
       });
@@ -54,25 +51,22 @@ const spawnStreamServer = () => {
     .on('error', (err) => {});
 };
 
-const spawnSignalingServer = () => {
-  console.log(colorette.blueBright('Building signaling server...'));
+const spawnServer = () => {
+  console.log(colorette.blueBright('Building server...'));
   const buildEnv = {};
 
   const runtimeEnv = {};
 
-  if (cpSignalingServer) {
-    cpSignalingServer.kill('SIGTERM');
-    cpSignalingServer = null;
+  if (cpServer) {
+    cpServer.kill('SIGTERM');
+    cpServer = null;
   }
 
-  const binPath = join(baseDir, 'dist', 'signaling.exe');
-  const builder = exec(
-    `cd ${signalingServerDir}\\main && go build -v -o ${binPath}`,
-    {
-      stdio: 'inherit',
-      env: { ...process.env, ...buildEnv },
-    },
-  );
+  const binPath = join(baseDir, 'dist', 'server.exe');
+  const builder = exec(`cd ${serverDir}\\main && go build -v -o ${binPath}`, {
+    stdio: 'inherit',
+    env: { ...process.env, ...buildEnv },
+  });
 
   builder.stdout.pipe(process.stdout);
   builder.stderr.pipe(process.stderr);
@@ -82,8 +76,8 @@ const spawnSignalingServer = () => {
       if (code !== 0) {
         return;
       }
-      console.log(colorette.blueBright('Starting signaling server...'));
-      cpSignalingServer = spawn(binPath, [`${signalingServerDir}\\.env`], {
+      console.log(colorette.blueBright('Starting server...'));
+      cpServer = spawn(binPath, [`${serverDir}\\.env`], {
         stdio: 'inherit',
         env: { ...process.env, ...runtimeEnv },
       });
@@ -91,13 +85,9 @@ const spawnSignalingServer = () => {
     .on('error', (err) => {});
 };
 
-chokidar
-  .watch(join(streamServerDir, '**', '*.go'))
-  .on('change', spawnStreamServer);
+chokidar.watch(join(captureDir, '**', '*.go')).on('change', spawnCapture);
 
-chokidar
-  .watch(join(signalingServerDir, '**', '*.go'))
-  .on('change', spawnSignalingServer);
+chokidar.watch(join(serverDir, '**', '*.go')).on('change', spawnServer);
 
-spawnStreamServer();
-spawnSignalingServer();
+spawnCapture();
+spawnServer();

@@ -44,9 +44,9 @@ func initConfig() {
 		remoteEnabledBool = false
 	}
 
-	signalingServer, hasEnv := os.LookupEnv("SIGNAL_SERVER_URL")
+	signalingServer, hasEnv := os.LookupEnv("SERVER_URL")
 	if !hasEnv {
-		panic("SIGNAL_SERVER_URL not set")
+		panic("SERVER_URL not set")
 	}
 
 	streamId, hasEnv := os.LookupEnv("STREAM_ID")

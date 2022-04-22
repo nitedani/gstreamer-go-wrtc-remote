@@ -24,14 +24,14 @@ func createMux() *echo.Echo {
 
 func main() {
 
-	if os.Getenv("GO_ENV") != "release" {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
-	}
-
 	if len(os.Args) > 1 {
 		envFilePath := os.Args[1]
 		godotenv.Load(envFilePath)
+	}
+
+	if os.Getenv("GO_ENV") != "release" {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
 	}
 	e := createMux()
 	g := e.Group("/api")

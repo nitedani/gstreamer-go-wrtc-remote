@@ -8,7 +8,7 @@
   "main": "dist/app/server/main.js",
   "scripts": {
     "prebuild": "rimraf dist",
-    "postinstall": "concurrently \"cd apps/streamserver && go mod download\" \"cd apps/signalserver && go mod download\"",
+    "postinstall": "concurrently \"cd apps/capture && go mod download\" \"cd apps/signalserver && go mod download\"",
     "build": "node scripts/package.js",
     "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,html,css,scss}\"",
     "start:dev": "concurrently \"webpack serve -c apps/webapp/webpack.config.dev.js\" \"node scripts/dev\" \"opener http://localhost:3000?streamId=default\"",
@@ -57,11 +57,6 @@
     "simple-peer": "^9.11.1"
   },
   "devDependencies": {
-    "@babel/plugin-proposal-decorators": "^7.17.0",
-    "@babel/plugin-transform-runtime": "^7.17.0",
-    "@babel/preset-env": "^7.16.11",
-    "@babel/preset-react": "^7.16.7",
-    "@babel/preset-typescript": "^7.16.7",
     "@emotion/react": "^11.7.1",
     "@emotion/styled": "^11.6.0",
     "@mui/icons-material": "^5.3.1",
@@ -90,8 +85,6 @@
     "@typescript-eslint/parser": "^5.10.1",
     "7zip-bin": "^5.1.1",
     "autoprefixer": "^10.4.2",
-    "babel-loader": "^8.2.3",
-    "babel-plugin-parameter-decorator": "^1.0.16",
     "chokidar": "^3.5.3",
     "clean-webpack-plugin": "^4.0.0",
     "concurrently": "^7.0.0",

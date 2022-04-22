@@ -1,10 +1,10 @@
 package main
 
 import (
-	"server/main/capture"
-	"server/main/remote"
-	"server/main/rtc"
-	"server/main/utils"
+	"capture/main/capture"
+	"capture/main/remote"
+	"capture/main/rtc"
+	"capture/main/utils"
 
 	"github.com/rs/zerolog/log"
 )

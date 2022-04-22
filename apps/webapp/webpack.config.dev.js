@@ -89,26 +89,7 @@ module.exports = {
       {
         exclude: /node_modules/,
         test: /.[tj]sx?$/,
-        use: {
-          loader: 'babel-loader',
-          options: {
-            presets: [
-              '@babel/preset-env',
-              [
-                '@babel/preset-react',
-                {
-                  runtime: 'automatic',
-                },
-              ],
-              '@babel/preset-typescript',
-            ],
-            plugins: [
-              ['@babel/plugin-proposal-decorators', { legacy: true }],
-              'babel-plugin-parameter-decorator',
-              '@babel/plugin-transform-runtime',
-            ],
-          },
-        },
+        loader: 'ts-loader',
       },
     ],
   },

@@ -1,8 +1,8 @@
 package rtc
 
 import (
+	"capture/main/utils"
 	"fmt"
-	"server/main/utils"
 	"time"
 
 	"github.com/go-resty/resty/v2"

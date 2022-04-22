@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 function extractSdp(sdpLine: string, pattern: RegExp) {
   const result = sdpLine.match(pattern);
   return result && result.length === 2 ? result[1] : null;

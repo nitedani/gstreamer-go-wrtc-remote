@@ -7,6 +7,7 @@ import { forceStereoAudio, setOpusAttributes } from './sdp';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import {
   Backdrop,
+  Box,
   CircularProgress,
   IconButton,
   Slider,
@@ -49,6 +50,7 @@ const App = () => {
     [],
   );
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity
   useEffect(() => {
     axios
       .post('/api/connect')
@@ -68,13 +70,22 @@ const App = () => {
           videoRef.current!.srcObject = event.streams[0];
         };
 
+        const sendCandidate = async (candidate: RTCIceCandidate) => {
+          setLogLines((prev) => [...prev, 'Sending ICE candidate...']);
+          await axios.post(signalPath, {
+            type: 'candidate',
+            candidate,
+          });
+        };
+
+        const pendingCandidates: RTCIceCandidate[] = [];
         pc.onicecandidate = async (e) => {
           if (e.candidate && e.candidate.candidate !== '') {
-            setLogLines((prev) => [...prev, 'Sending ICE candidate...']);
-            await axios.post(signalPath, {
-              type: 'candidate',
-              candidate: e.candidate,
-            });
+            if (!pc.remoteDescription) {
+              pendingCandidates.push(e.candidate);
+              return;
+            }
+            await sendCandidate(e.candidate);
           }
         };
 
@@ -93,6 +104,28 @@ const App = () => {
                 };
 
                 pc.setRemoteDescription(patchedRemote);
+                if (pendingCandidates.length) {
+                  while (pendingCandidates.length) {
+                    const candidate = pendingCandidates.shift();
+                    if (candidate) {
+                      await sendCandidate(candidate);
+                    }
+                  }
+                }
+              } else if (signal.type === 'offer') {
+                setLogLines((prev) => [...prev, 'Received offer...']);
+                const patchedRemote = {
+                  type: signal.type,
+                  sdp: sdpTransform(signal.sdp),
+                };
+                pc.setRemoteDescription(patchedRemote);
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                setLogLines((prev) => [...prev, 'Sending answer...']);
+                await axios.post(signalPath, {
+                  type: 'answer',
+                  sdp: answer.sdp,
+                });
               }
             }
 
@@ -178,6 +211,29 @@ const App = () => {
 
   return (
     <div className="App">
+      {loading && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '300px',
+            height: 'fit-content',
+            background: '#00000099',
+            backdropFilter: 'blur(5px)',
+            color: 'white',
+            padding: '20px',
+            margin: '8px',
+            lineHeight: '1.2em',
+            border: '1px solid gray',
+          }}
+        >
+          {logLines.map((line, index) => (
+            <div key={index}>{line}</div>
+          ))}
+        </Box>
+      )}
+
       <Backdrop
         sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
         open={loading}

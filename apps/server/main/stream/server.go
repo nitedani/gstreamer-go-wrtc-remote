@@ -5,20 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
+
+	"signaling/main/rtc"
 	"signaling/main/utils"
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog/log"
 )
-
-type Signal struct {
-	ViewerId  string `json:"viewerId"`
-	Type      string `json:"type"`
-	Candidate any    `json:"candidate"`
-	SDP       string `json:"sdp"`
-}
 
 func randomStr() string {
 	n := 5
@@ -30,11 +25,16 @@ func randomStr() string {
 	return s
 }
 
-/////////////////////////////streamId///viewerId//signals
-var to_server_signal_buffers = make(map[string][]Signal, 0)
+var runId = randomStr()
 
 /////////////////////////////streamId///viewerId//signals
-var to_viewer_signal_buffers = make(map[string]map[string][]Signal, 0)
+var to_server_signal_buffers = make(map[string][]rtc.Signal, 0)
+
+/////////////////////////////streamId///viewerId//signals
+var to_viewer_signal_buffers = make(map[string]map[string][]rtc.Signal, 0)
+
+/////////////////////////////streamId
+var stream_managers = make(map[string]*rtc.ConnectionManager, 0)
 
 func getViewerId(c echo.Context) string {
 	id_cookie, err := c.Cookie("connection_id")
@@ -44,49 +44,12 @@ func getViewerId(c echo.Context) string {
 	return id_cookie.Value
 }
 
-type ICEServer struct {
-	URLs           []string    `json:"urls"`
-	Username       string      `json:"username,omitempty"`
-	Credential     interface{} `json:"credential,omitempty"`
-	CredentialType string      `json:"credentialType,omitempty"`
-}
-
 func StartSignalingServer(g *echo.Group) {
+	config := rtc.GetRtcConfig()
+	iceServers := config.ICEServers
+	directConnect := config.DirectConnect
 
-	iceServers := make([]ICEServer, 0)
-	turn_server_url, hasEnv := os.LookupEnv("TURN_SERVER_URL")
-	if hasEnv && turn_server_url != "" {
-		iceServer := ICEServer{
-			URLs: []string{turn_server_url},
-		}
-		turn_server_username := os.Getenv("TURN_SERVER_USERNAME")
-		if turn_server_username != "" {
-			iceServer.Username = turn_server_username
-		}
-		turn_server_password := os.Getenv("TURN_SERVER_PASSWORD")
-		if turn_server_password != "" {
-			iceServer.Credential = turn_server_password
-			iceServer.CredentialType = "password"
-		}
-		iceServers = append(iceServers, iceServer)
-	}
-
-	stun_server_url, hasEnv := os.LookupEnv("STUN_SERVER_URL")
-	if hasEnv && stun_server_url != "" {
-		iceServer := ICEServer{
-			URLs: []string{stun_server_url},
-		}
-		stun_server_username := os.Getenv("STUN_SERVER_USERNAME")
-		if stun_server_username != "" {
-			iceServer.Username = stun_server_username
-		}
-		stun_server_password := os.Getenv("STUN_SERVER_PASSWORD")
-		if stun_server_password != "" {
-			iceServer.Credential = stun_server_password
-			iceServer.CredentialType = "password"
-		}
-		iceServers = append(iceServers, iceServer)
-	}
+	clientConnectionManager := rtc.NewConnectionManager()
 
 	g.GET("/ice-config", func(c echo.Context) error {
 
@@ -115,7 +78,7 @@ func StartSignalingServer(g *echo.Group) {
 	g.GET("/signal/:streamId", func(c echo.Context) error {
 		streamId := c.PathParam("streamId")
 		viewerId := getViewerId(c)
-		signals_to_send := make(chan []Signal, 0)
+		signals_to_send := make(chan []rtc.Signal, 0)
 
 		log.Info().
 			Str("method", "GET").
@@ -123,27 +86,29 @@ func StartSignalingServer(g *echo.Group) {
 			Str("streamId", streamId).
 			Msg("client called /signal/:streamId")
 
+		// if the server is restarted, need to force a new connection
+		streamId = streamId + runId
 		go func() {
 			now := time.Now()
 			for {
 				//if 20 seconds passed, return empty array
 				if time.Since(now) > 20*time.Second {
-					signals_to_send <- make([]Signal, 0)
+					signals_to_send <- make([]rtc.Signal, 0)
 					return
 				}
 
 				if to_viewer_signal_buffers[streamId] == nil {
-					to_viewer_signal_buffers[streamId] = make(map[string][]Signal, 0)
+					to_viewer_signal_buffers[streamId] = make(map[string][]rtc.Signal, 0)
 				}
 
 				if to_viewer_signal_buffers[streamId][viewerId] == nil {
-					to_viewer_signal_buffers[streamId][viewerId] = make([]Signal, 0)
+					to_viewer_signal_buffers[streamId][viewerId] = make([]rtc.Signal, 0)
 				}
 
 				// wait until signal_buffer[id] is not empty
 				if len(to_viewer_signal_buffers[streamId][viewerId]) > 0 {
 					signals_to_send <- (to_viewer_signal_buffers[streamId][viewerId])
-					to_viewer_signal_buffers[streamId][viewerId] = make([]Signal, 0)
+					to_viewer_signal_buffers[streamId][viewerId] = make([]rtc.Signal, 0)
 					return
 				}
 				time.Sleep(time.Second * 1)
@@ -166,14 +131,74 @@ func StartSignalingServer(g *echo.Group) {
 			Str("streamId", streamId).
 			Msg("client called /signal/:streamId")
 
+		// if the server is restarted, need to force a new connection
+		streamId = streamId + runId
+
+		// if to_server_signal_buffers[streamId] == nil, that means the client is not connected to the server
 		if to_server_signal_buffers[streamId] == nil {
 			return c.String(http.StatusNotFound, "stream not found")
 		}
-		signal := utils.ParseBody[Signal](c)
+
+		signal := utils.ParseBody[rtc.Signal](c)
 		signal.Value.ViewerId = viewerId
-		to_server_signal_buffers[streamId] = append(
-			to_server_signal_buffers[streamId],
-			signal.Value)
+
+		if directConnect {
+			to_server_signal_buffers[streamId] = append(
+				to_server_signal_buffers[streamId],
+				signal.Value)
+		} else {
+
+			// One per stream client
+			sc := clientConnectionManager.GetConnection(streamId)
+
+			// build the sc between the server and client, if not exist
+			if sc == nil {
+				sc = clientConnectionManager.NewConnection(streamId)
+				sc.OnSignal(func(signal rtc.Signal) {
+					to_server_signal_buffers[streamId] = append(
+						to_server_signal_buffers[streamId],
+						signal)
+				})
+
+				sc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly})
+				sc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly})
+
+				sc.Initiate()
+			}
+
+			if stream_managers[streamId] == nil {
+				stream_managers[streamId] = rtc.NewConnectionManager()
+				stream_managers[streamId].OnAllDisconnected(func() {
+					// when all viewers disconnected from this stream,
+					// disconnect the server(this code) from the capture client
+					clientConnectionManager.RemoveConnection(streamId)
+				})
+			}
+
+			vc := stream_managers[streamId].GetConnection(viewerId)
+
+			// build the vc between the browser and server
+			if vc == nil {
+				vc = stream_managers[streamId].NewConnection(viewerId)
+				vc.OnSignal(func(signal rtc.Signal) {
+					if to_viewer_signal_buffers[streamId] == nil {
+						to_viewer_signal_buffers[streamId] = make(map[string][]rtc.Signal, 0)
+					}
+
+					if to_viewer_signal_buffers[streamId][viewerId] == nil {
+						to_viewer_signal_buffers[streamId][viewerId] = make([]rtc.Signal, 0)
+					}
+					to_viewer_signal_buffers[streamId][viewerId] =
+						append(to_viewer_signal_buffers[streamId][viewerId], signal)
+				})
+				// forward the tracks received from the capture client to the viewer
+				sc.ConnectTo(vc)
+			}
+
+			vc.Signal(signal.Value)
+
+		}
+
 		return c.String(http.StatusOK, "OK")
 	})
 
@@ -192,15 +217,18 @@ func StartSignalingServer(g *echo.Group) {
 		}()
 
 		streamId := c.PathParam("streamId")
-		signals_to_send := make(chan []Signal, 0)
+		signals_to_send := make(chan []rtc.Signal, 0)
 
 		log.Info().
 			Str("method", "GET").
 			Str("streamId", streamId).
 			Msg("server called /signal/:streamId/internal")
 
+		// if the server is restarted, need to force a new connection
+		streamId = streamId + runId
+
 		if to_server_signal_buffers[streamId] == nil {
-			to_server_signal_buffers[streamId] = make([]Signal, 0)
+			to_server_signal_buffers[streamId] = make([]rtc.Signal, 0)
 		}
 
 		go func() {
@@ -214,14 +242,14 @@ func StartSignalingServer(g *echo.Group) {
 				}
 				//if 20 seconds passed, return empty array
 				if time.Since(now) > 20*time.Second {
-					signals_to_send <- make([]Signal, 0)
+					signals_to_send <- make([]rtc.Signal, 0)
 					return
 				}
 
 				// wait until signal_buffer[id] is not empty
 				if len(to_server_signal_buffers[streamId]) > 0 {
 					signals_to_send <- (to_server_signal_buffers[streamId])
-					to_server_signal_buffers[streamId] = make([]Signal, 0)
+					to_server_signal_buffers[streamId] = make([]rtc.Signal, 0)
 					return
 				}
 
@@ -238,7 +266,7 @@ func StartSignalingServer(g *echo.Group) {
 		signals_to_send_obj := <-signals_to_send
 
 		//offers come before candidates
-		sortedSignals := make([]Signal, 0)
+		sortedSignals := make([]rtc.Signal, 0)
 		for _, signal := range signals_to_send_obj {
 			if signal.Type == "offer" {
 				sortedSignals = append(sortedSignals, signal)
@@ -257,27 +285,36 @@ func StartSignalingServer(g *echo.Group) {
 	// Server route
 	g.POST("/signal/:streamId/internal", func(c echo.Context) error {
 		streamId := c.PathParam("streamId")
-		signals := utils.ParseBody[[]Signal](c)
+		signals := utils.ParseBody[[]rtc.Signal](c)
 
 		log.Info().
 			Str("method", "POST").
 			Str("streamId", streamId).
 			Msg("server called /signal/:streamId/internal")
 
-		for _, signal := range signals.Value {
+		// if the server is restarted, need to force a new connection
+		streamId = streamId + runId
+		if directConnect {
+			for _, signal := range signals.Value {
+				viewerId := signal.ViewerId
+				if to_viewer_signal_buffers[streamId] == nil {
+					to_viewer_signal_buffers[streamId] = make(map[string][]rtc.Signal, 0)
+				}
 
-			viewerId := signal.ViewerId
-			if to_viewer_signal_buffers[streamId] == nil {
-				to_viewer_signal_buffers[streamId] = make(map[string][]Signal, 0)
+				if to_viewer_signal_buffers[streamId][viewerId] == nil {
+					to_viewer_signal_buffers[streamId][viewerId] = make([]rtc.Signal, 0)
+				}
+
+				to_viewer_signal_buffers[streamId][viewerId] =
+					append(to_viewer_signal_buffers[streamId][viewerId], signal)
+
 			}
+		} else {
 
-			if to_viewer_signal_buffers[streamId][viewerId] == nil {
-				to_viewer_signal_buffers[streamId][viewerId] = make([]Signal, 0)
+			sc := clientConnectionManager.GetConnection(streamId)
+			for _, signal := range signals.Value {
+				sc.Signal(signal)
 			}
-
-			to_viewer_signal_buffers[streamId][viewerId] =
-				append(to_viewer_signal_buffers[streamId][viewerId], signal)
-
 		}
 
 		return c.String(http.StatusOK, "OK")

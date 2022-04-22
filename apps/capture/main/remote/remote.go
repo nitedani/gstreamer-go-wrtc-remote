@@ -1,9 +1,9 @@
 package remote
 
 import (
+	"capture/main/rtc"
 	"encoding/json"
 	"fmt"
-	"server/main/rtc"
 	"strings"
 
 	"github.com/go-vgo/robotgo"

@@ -1,7 +1,7 @@
 package rtc
 
 import (
-	"server/main/utils"
+	"capture/main/utils"
 
 	"github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog/log"
