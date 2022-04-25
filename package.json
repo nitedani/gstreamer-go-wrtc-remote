@@ -19,7 +19,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "start": "cross-env GO_ENV=release dist/main",
-    "pre-commit": "npm run format && npm run lint && jest",
+    "pre-commit": "npm run format && npm run lint",
     "prepare": "npx husky install"
   },
   "husky": {
