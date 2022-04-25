@@ -100,7 +100,7 @@ main.exe %1`;
   const exampleConfig = `\
 SERVER_URL=http://localhost:4000/api
 STREAM_ID=default
-REMOTE_ENABLED=true
+REMOTE_ENABLED=false
 BITRATE=10485760
 RESOLUTION=1280x720
 FRAMERATE=30
