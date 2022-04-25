@@ -217,7 +217,17 @@ export const Stream = () => {
   }, []);
 
   return (
-    <div className="stream-page">
+    <Box
+      className="stream-page"
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100vw',
+        height: '100vh',
+      }}
+    >
       {loading && (
         <Box
           sx={{
@@ -301,6 +311,6 @@ export const Stream = () => {
           </div>
         )}
       </div>
-    </div>
+    </Box>
   );
 };

@@ -64,16 +64,19 @@ func NewConnectionManager() *ConnectionManager {
 	}
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 5)
+		ticker := time.NewTicker(time.Second * 1)
 		for range ticker.C {
+			all_disconnect := true
 			for _, connection := range connections {
-				if connection.ConnectionState() == webrtc.PeerConnectionStateClosed {
-					numConnections--
+				if connection.ConnectionState() != webrtc.PeerConnectionStateClosed {
+					all_disconnect = false
+				} else {
 					delete(connections, connection.ViewerId)
-					if numConnections == 0 {
-						e.Emit("alldisconnected")
-					}
 				}
+			}
+			if all_disconnect {
+				numConnections = 0
+				e.Emit("alldisconnected")
 			}
 		}
 	}()

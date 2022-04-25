@@ -25,7 +25,7 @@ func createMux() *echo.Echo {
 }
 
 func main() {
-
+	//return
 	if os.Getenv("GO_ENV") != "release" {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}

@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"signaling/main/rtc"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/labstack/echo/v5"
@@ -81,4 +83,36 @@ func DoRequest(url string) PromiseReturnType[*resty.Response] {
 			reject(err)
 		}
 	})
+}
+
+func RandomStr() string {
+	n := 5
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	s := fmt.Sprintf("%X", b)
+	return s
+}
+func GetViewerId(c echo.Context) string {
+	id_cookie, err := c.Cookie("connection_id")
+	if err != nil {
+		panic(err)
+	}
+	return id_cookie.Value
+}
+func SortSignals(signals []rtc.Signal) []rtc.Signal {
+	//offers come before candidates
+	sortedSignals := make([]rtc.Signal, 0)
+	for _, signal := range signals {
+		if signal.Type == "offer" {
+			sortedSignals = append(sortedSignals, signal)
+		}
+	}
+	for _, signal := range signals {
+		if signal.Type == "candidate" {
+			sortedSignals = append(sortedSignals, signal)
+		}
+	}
+	return sortedSignals
 }

@@ -94,17 +94,23 @@ func (peerConnection *PeerConnection) initializeConnection() {
 
 	peerConnection.OnConnectionStateChange(func(connectionState webrtc.PeerConnectionState) {
 		if connectionState == webrtc.PeerConnectionStateDisconnected {
+			go func() {
+				peerConnection.Emit("disconnected")
+			}()
 			peerConnection.Close()
-			peerConnection.Emit("disconnected")
 		} else if connectionState == webrtc.PeerConnectionStateConnected {
-			peerConnection.Emit("connected")
+			go func() {
+				peerConnection.Emit("connected")
+			}()
 		}
 	})
 
 	peerConnection.OnTrack(func(tr *webrtc.TrackRemote, r *webrtc.RTPReceiver) {
 		localTrack := peerConnection.AddRemoteTrack(tr)
 		peerConnection.LocalTracks = append(peerConnection.LocalTracks, localTrack)
-		peerConnection.Emit("track", localTrack)
+		go func() {
+			peerConnection.Emit("track", localTrack)
+		}()
 	})
 }
 
@@ -175,6 +181,7 @@ func (peerConnection *PeerConnection) AddRemoteTrack(tr *webrtc.TrackRemote) *we
 }
 
 func (peerConnection *PeerConnection) Initiate() {
+
 	offer, err := peerConnection.CreateOffer(nil)
 	if err != nil {
 		panic(err)
@@ -182,17 +189,20 @@ func (peerConnection *PeerConnection) Initiate() {
 	if err = peerConnection.SetLocalDescription(offer); err != nil {
 		panic(err)
 	}
+
 	signal := Signal{
 		ViewerId: peerConnection.Id,
 		Type:     "offer",
 		SDP:      offer.SDP,
 	}
+
 	peerConnection.Emit("signal", signal)
+
 }
 
 func newConnection(Id string) (peerConnection *PeerConnection) {
 	e := &emitter.Emitter{}
-	e.Use("*", emitter.Void)
+	//e.Use("*", emitter.Void)
 	localTracks := make([]*webrtc.TrackLocalStaticRTP, 0)
 	pendingCandidates := make([]*webrtc.ICECandidate, 0)
 	var snapshot *bytes.Buffer = nil
@@ -212,7 +222,9 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 					log.Err(err).Send()
 					return err
 				}
-				e.Emit("signal", *answerSignal)
+				go func() {
+					e.Emit("signal", *answerSignal)
+				}()
 			case "answer":
 				initialized = true
 				if err := peerConnection.SetRemoteDescription(webrtc.SessionDescription{SDP: signal.SDP, Type: webrtc.SDPTypeAnswer}); err != nil {
@@ -226,9 +238,10 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 						Type:      "candidate",
 						Candidate: json,
 					}
-					peerConnection.Emit("signal", signal)
+					go func() {
+						e.Emit("signal", signal)
+					}()
 				}
-
 			case "candidate":
 				if !initialized {
 					log.Warn().
@@ -245,19 +258,23 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 			return nil
 		},
 		OnSignal: func(cb func(signal Signal)) {
-			e.On("signal", func(e *emitter.Event) {
-				cb(e.Args[0].(Signal))
-			})
+			go func() {
+				for event := range e.On("signal") {
+					go cb(event.Args[0].(Signal))
+				}
+			}()
 		},
 		OnDisconnected: func(cb func()) {
-			peerConnection.Once("disconnected", func(e *emitter.Event) {
+			go func() {
+				<-e.On("disconnected")
 				cb()
-			})
+			}()
 		},
 		OnConnected: func(cb func()) {
-			peerConnection.Once("connected", func(e *emitter.Event) {
+			go func() {
+				<-e.On("connected")
 				cb()
-			})
+			}()
 		},
 		AddTracks: func(tracks *Tracks) {
 			rtpSender, err := peerConnection.AddTrack(tracks.AudioTrack)
@@ -281,21 +298,25 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 				}
 				return
 			}
-			peerConnection.Once("connected", func(e *emitter.Event) {
+
+			peerConnection.OnConnected(func() {
 				time.Sleep(time.Millisecond * 1000)
 				if len(peerConnection.LocalTracks) > 0 {
+
 					for _, track := range peerConnection.LocalTracks {
 						other.AddTrack(track)
 					}
 					time.Sleep(time.Millisecond * 1000)
 					// re-negotiate with the browser
 					other.Initiate()
+
 				}
 				peerConnection.On("track", func(e *emitter.Event) {
 					track := e.Args[0].(*webrtc.TrackLocalStaticRTP)
 					other.AddTrack(track)
 					// re-negotiate with the browser
 					other.Initiate()
+
 				})
 			})
 		},
