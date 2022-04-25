@@ -132,19 +132,19 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 		Signal: func(signal Signal) error {
 			switch signal.Type {
 			case "offer":
+				initialized = true
 				answerSignal, err := peerConnection.applyOffer(signal)
 				if err != nil {
 					log.Err(err).Send()
 					return err
 				}
 				e.Emit("signal", *answerSignal)
-				initialized = true
 			case "answer":
+				initialized = true
 				if err := peerConnection.SetRemoteDescription(webrtc.SessionDescription{SDP: signal.SDP, Type: webrtc.SDPTypeOffer}); err != nil {
 					log.Err(err).Send()
 					return err
 				}
-				initialized = true
 			case "candidate":
 				if !initialized {
 					log.Warn().

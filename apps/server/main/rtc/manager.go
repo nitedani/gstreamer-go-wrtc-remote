@@ -1,7 +1,11 @@
 package rtc
 
 import (
+	"bytes"
+	"time"
+
 	"github.com/olebedev/emitter"
+	"github.com/pion/webrtc/v3"
 )
 
 type ConnectionManager struct {
@@ -10,6 +14,8 @@ type ConnectionManager struct {
 	GetConnection     func(connectionId string) *PeerConnection
 	NewConnection     func(connectionId string) *PeerConnection
 	RemoveConnection  func(connectionId string)
+	SetSnapshot       func(connectionId string, snapshot *bytes.Buffer)
+	GetSnapshot       func(connectionId string) *bytes.Buffer
 	OnAllDisconnected func(cb func())
 	OnFirstConnection func(cb func())
 }
@@ -17,11 +23,12 @@ type ConnectionManager struct {
 func NewConnectionManager() *ConnectionManager {
 	//A map to store connections by their ID
 	var connections = make(map[string]*PeerConnection)
+	var snapshots = make(map[string]*bytes.Buffer)
 	e := &emitter.Emitter{}
 	e.Use("*", emitter.Void)
 	numConnections := 0
 
-	return &ConnectionManager{
+	manager := &ConnectionManager{
 		connections: connections,
 		GetConnections: func() map[string]*PeerConnection {
 			return connections
@@ -31,7 +38,7 @@ func NewConnectionManager() *ConnectionManager {
 		},
 		NewConnection: func(connectionId string) *PeerConnection {
 			connection := newConnection(connectionId)
-			connections[connection.ViewerId] = connection
+			connections[connection.Id] = connection
 
 			connection.OnConnected(func() {
 				numConnections++
@@ -42,7 +49,7 @@ func NewConnectionManager() *ConnectionManager {
 
 			connection.OnDisconnected(func() {
 				numConnections--
-				delete(connections, connection.ViewerId)
+				delete(connections, connection.Id)
 				if numConnections == 0 {
 					e.Emit("alldisconnected")
 				}
@@ -66,5 +73,29 @@ func NewConnectionManager() *ConnectionManager {
 				cb()
 			})
 		},
+		SetSnapshot: func(connectionId string, snapshot *bytes.Buffer) {
+			snapshots[connectionId] = snapshot
+		},
+		GetSnapshot: func(connectionId string) *bytes.Buffer {
+			return snapshots[connectionId]
+		},
 	}
+
+	go func() {
+		ticker := time.NewTicker(time.Second * 5)
+		for range ticker.C {
+			for _, connection := range connections {
+				if connection.ConnectionState() == webrtc.PeerConnectionStateClosed {
+					numConnections--
+					delete(connections, connection.Id)
+					if numConnections == 0 {
+						e.Emit("alldisconnected")
+					}
+				}
+			}
+		}
+	}()
+
+	return manager
+
 }

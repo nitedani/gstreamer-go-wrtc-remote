@@ -1,6 +1,7 @@
 package rtc
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -22,7 +23,7 @@ type Tracks struct {
 }
 
 type PeerConnection struct {
-	ViewerId          string
+	Id                string
 	OnSignal          func(cb func(signal Signal))
 	Signal            func(signal Signal) error
 	OnConnected       func(cb func())
@@ -31,6 +32,8 @@ type PeerConnection struct {
 	ConnectTo         func(peerConnection *PeerConnection)
 	LocalTracks       []*webrtc.TrackLocalStaticRTP
 	PendingCandidates []*webrtc.ICECandidate
+	SetSnapshot       func(snapshot *bytes.Buffer)
+	GetSnapshot       func() *bytes.Buffer
 	*webrtc.PeerConnection
 	*emitter.Emitter
 }
@@ -72,9 +75,10 @@ func (peerConnection *PeerConnection) initializeConnection() {
 			peerConnection.PendingCandidates = append(peerConnection.PendingCandidates, c)
 			return
 		}
+
 		json := c.ToJSON()
 		signal := Signal{
-			ViewerId:  peerConnection.ViewerId,
+			ViewerId:  peerConnection.Id,
 			Type:      "candidate",
 			Candidate: json,
 		}
@@ -84,7 +88,7 @@ func (peerConnection *PeerConnection) initializeConnection() {
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Info().
 			Str("state", connectionState.String()).
-			Str("viewerId", peerConnection.ViewerId).
+			Str("viewerId", peerConnection.Id).
 			Msg("ICE Connection State has changed")
 	})
 
@@ -123,7 +127,7 @@ func (peerConnection *PeerConnection) applyOffer(signal Signal) (*Signal, error)
 
 	answerSignal := &Signal{
 		Type:     "answer",
-		ViewerId: peerConnection.ViewerId,
+		ViewerId: peerConnection.Id,
 		SDP:      answer.SDP,
 	}
 
@@ -139,6 +143,10 @@ func (peerConnection *PeerConnection) AddRemoteTrack(tr *webrtc.TrackRemote) *we
 	go func() {
 		ticker := time.NewTicker(time.Second * 3)
 		for range ticker.C {
+			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
+				return
+			}
+
 			errSend := peerConnection.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(tr.SSRC())}})
 			if errSend != nil {
 				return
@@ -148,6 +156,10 @@ func (peerConnection *PeerConnection) AddRemoteTrack(tr *webrtc.TrackRemote) *we
 
 	go func() {
 		for {
+			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
+				return
+			}
+
 			rtp, _, readErr := tr.ReadRTP()
 			if readErr != nil {
 				return
@@ -171,25 +183,26 @@ func (peerConnection *PeerConnection) Initiate() {
 		panic(err)
 	}
 	signal := Signal{
-		ViewerId: peerConnection.ViewerId,
+		ViewerId: peerConnection.Id,
 		Type:     "offer",
 		SDP:      offer.SDP,
 	}
 	peerConnection.Emit("signal", signal)
 }
 
-func newConnection(viewerId string) (peerConnection *PeerConnection) {
+func newConnection(Id string) (peerConnection *PeerConnection) {
 	e := &emitter.Emitter{}
 	e.Use("*", emitter.Void)
 	localTracks := make([]*webrtc.TrackLocalStaticRTP, 0)
 	pendingCandidates := make([]*webrtc.ICECandidate, 0)
+	var snapshot *bytes.Buffer = nil
 
 	initialized := false
 	peerConnection = &PeerConnection{
 		PendingCandidates: pendingCandidates,
 		LocalTracks:       localTracks,
 		Emitter:           e,
-		ViewerId:          viewerId,
+		Id:                Id,
 		Signal: func(signal Signal) error {
 			switch signal.Type {
 			case "offer":
@@ -201,7 +214,6 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 				}
 				e.Emit("signal", *answerSignal)
 			case "answer":
-
 				initialized = true
 				if err := peerConnection.SetRemoteDescription(webrtc.SessionDescription{SDP: signal.SDP, Type: webrtc.SDPTypeAnswer}); err != nil {
 					log.Err(err).Send()
@@ -210,7 +222,7 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 				for _, c := range peerConnection.PendingCandidates {
 					json := c.ToJSON()
 					signal := Signal{
-						ViewerId:  peerConnection.ViewerId,
+						ViewerId:  peerConnection.Id,
 						Type:      "candidate",
 						Candidate: json,
 					}
@@ -286,7 +298,12 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 					other.Initiate()
 				})
 			})
-
+		},
+		SetSnapshot: func(_snapshot *bytes.Buffer) {
+			snapshot = _snapshot
+		},
+		GetSnapshot: func() *bytes.Buffer {
+			return snapshot
 		},
 		PeerConnection: nil,
 	}

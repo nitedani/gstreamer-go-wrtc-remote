@@ -12,7 +12,7 @@
     "build": "node scripts/package.js",
     "build:docker": "node scripts/docker.js",
     "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,html,css,scss}\"",
-    "start:dev": "concurrently \"webpack serve -c apps/webapp/webpack.config.dev.js\" \"node scripts/dev\" \"opener http://localhost:3000?streamId=default\"",
+    "start:dev": "concurrently \"webpack serve -c apps/webapp/webpack.config.dev.js\" \"node scripts/dev\" \"opener http://localhost:3000\"",
     "start:prod": "cross-env NODE_ENV=production node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.{ts,tsx}\" --fix",
     "test": "npm run pre-commit",
@@ -55,7 +55,8 @@
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "rxjs": "^7.5.2",
-    "simple-peer": "^9.11.1"
+    "simple-peer": "^9.11.1",
+    "zustand": "^4.0.0-rc.0"
   },
   "devDependencies": {
     "@emotion/react": "^11.7.1",
@@ -93,6 +94,7 @@
     "cross-env": "^7.0.3",
     "css-loader": "^6.5.1",
     "easy-peasy": "^5.0.4",
+    "esbuild-loader": "^2.18.0",
     "eslint": "^8.7.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-prettier": "^4.0.0",
@@ -114,7 +116,7 @@
     "prettier": "^2.5.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
-    "react-query": "^3.34.12",
+    "react-query": "^3.38.0",
     "react-router-dom": "^6.2.1",
     "react-use": "^17.3.2",
     "sass": "^1.49.7",
@@ -128,6 +130,7 @@
     "ts-loader": "^9.2.6",
     "ts-node": "^10.4.0",
     "tsconfig-paths": "^3.12.0",
+    "tsconfig-paths-webpack-plugin": "^3.5.2",
     "type-fest": "^2.10.0",
     "typescript": "^4.5.5",
     "web-vitals": "^2.1.4",

@@ -2,9 +2,11 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const TsconfigPathsPlugin = require('tsconfig-paths-webpack-plugin');
 const WebpackMessages = require('webpack-messages');
 const { join } = require('path');
 const { cwd } = require('process');
+const { ProvidePlugin } = require('webpack');
 
 const fileExtensions = [
   'jpg',
@@ -27,6 +29,11 @@ module.exports = {
       http: false,
     },
     extensions: ['.js', '.jsx', '.ts', '.tsx'],
+    plugins: [
+      new TsconfigPathsPlugin({
+        configFile: join(cwd(), 'apps', 'webapp', 'tsconfig.json'),
+      }),
+    ],
   },
   mode: 'production',
   entry: [join(cwd(), 'apps', 'webapp', 'src', 'index.tsx')],
@@ -87,8 +94,12 @@ module.exports = {
       },
       {
         exclude: /node_modules/,
-        test: /.[tj]sx?$/,
-        loader: 'ts-loader',
+        test: /\.tsx?$/,
+        loader: 'esbuild-loader',
+        options: {
+          loader: 'tsx', // Or 'ts' if you don't need tsx
+          target: 'esnext',
+        },
       },
     ],
   },
@@ -112,6 +123,9 @@ module.exports = {
     }),
     new HtmlWebpackPlugin({
       template: join(cwd(), 'apps', 'webapp', 'public', 'index.html'),
+    }),
+    new ProvidePlugin({
+      React: 'react',
     }),
   ],
 };

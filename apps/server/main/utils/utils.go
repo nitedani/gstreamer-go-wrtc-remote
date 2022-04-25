@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/labstack/echo/v5"
+	"github.com/rs/zerolog/log"
 )
 
 type ParseJsonValue[T any] struct {
@@ -28,7 +29,7 @@ func ParseBody[T any](c echo.Context) ParseJsonValue[T] {
 	parsed := ParseJsonValue[T]{}
 	err := c.Bind(&parsed.Value)
 	if err != nil {
-		fmt.Println(err)
+		log.Err(err).Send()
 		return ParseJsonValue[T]{Error: err}
 	}
 	return parsed

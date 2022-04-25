@@ -1,11 +1,15 @@
 package rtc
 
 import (
+	"bytes"
 	"capture/main/utils"
 	"fmt"
+	"image/jpeg"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/go-vgo/robotgo"
+	"github.com/nfnt/resize"
 	"github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog/log"
 )
@@ -76,10 +80,36 @@ func PollSignals() chan Signal {
 	return signalsChan
 }
 
+func SendSnapshots() {
+	config := utils.GetConfig()
+	ticker := time.NewTicker(time.Second * 5)
+	client := resty.New()
+	sx, sy := robotgo.GetScreenSize()
+	for range ticker.C {
+		frame := robotgo.CaptureImg(0, 0, sx, sy)
+		resized := resize.Resize(1280, 0, frame, resize.Lanczos3)
+		buf := &bytes.Buffer{}
+		err := jpeg.Encode(buf, resized, &jpeg.Options{Quality: 70})
+		if err != nil {
+			log.Err(err).Send()
+			continue
+		}
+		_, err = client.R().
+			SetBody(buf.Bytes()).
+			Post(fmt.Sprintf("%s/snapshot/%s/internal", config.SignalingServer, config.StreamId))
+
+		if err != nil {
+			log.Err(err).Send()
+			continue
+		}
+	}
+}
+
 func NewSignaling() *Signaling {
 	Initialize()
 	outgoing_signal_chan := make(chan Signal, 100)
 	go SendSignals(outgoing_signal_chan)
+	go SendSnapshots()
 	signalsChan := PollSignals()
 	return &Signaling{
 		Signal: func(signal Signal) { outgoing_signal_chan <- signal },

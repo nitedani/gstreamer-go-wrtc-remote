@@ -1,7 +1,10 @@
 package rtc
 
 import (
+	"time"
+
 	"github.com/olebedev/emitter"
+	"github.com/pion/webrtc/v3"
 )
 
 type ConnectionManager struct {
@@ -20,7 +23,7 @@ func NewConnectionManager() *ConnectionManager {
 	e.Use("*", emitter.Void)
 	numConnections := 0
 
-	return &ConnectionManager{
+	manager := &ConnectionManager{
 		connections: connections,
 		GetConnections: func() map[string]*PeerConnection {
 			return connections
@@ -59,4 +62,21 @@ func NewConnectionManager() *ConnectionManager {
 			})
 		},
 	}
+
+	go func() {
+		ticker := time.NewTicker(time.Second * 5)
+		for range ticker.C {
+			for _, connection := range connections {
+				if connection.ConnectionState() == webrtc.PeerConnectionStateClosed {
+					numConnections--
+					delete(connections, connection.ViewerId)
+					if numConnections == 0 {
+						e.Emit("alldisconnected")
+					}
+				}
+			}
+		}
+	}()
+
+	return manager
 }

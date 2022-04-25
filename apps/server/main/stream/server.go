@@ -1,9 +1,11 @@
 package stream
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"signaling/main/rtc"
@@ -44,6 +46,11 @@ func getViewerId(c echo.Context) string {
 	return id_cookie.Value
 }
 
+type ListStreamsResponseEntry struct {
+	StreamId string `json:"streamId"`
+	Viewers  int    `json:"viewers"`
+}
+
 func StartSignalingServer(g *echo.Group) {
 	config := rtc.GetRtcConfig()
 	iceServers := config.ICEServers
@@ -51,8 +58,46 @@ func StartSignalingServer(g *echo.Group) {
 
 	clientConnectionManager := rtc.NewConnectionManager()
 
-	g.GET("/ice-config", func(c echo.Context) error {
+	g.GET("/streams", func(c echo.Context) error {
 
+		log.Info().
+			Msg("called /streams")
+
+		response := make([]ListStreamsResponseEntry, 0)
+
+		for streamId_runId := range to_server_signal_buffers {
+			streamId := streamId_runId[:len(streamId_runId)-len(runId)]
+			viewers := 0
+			if stream_managers[streamId_runId] != nil {
+				viewers = len(stream_managers[streamId_runId].GetConnections())
+			}
+			response = append(response, ListStreamsResponseEntry{
+				StreamId: streamId,
+				Viewers:  viewers,
+			})
+
+		}
+
+		return c.JSON(http.StatusOK, response)
+	})
+
+	g.GET("/snapshot/:streamId", func(c echo.Context) error {
+
+		streamId := c.PathParam("streamId")
+		viewerId := getViewerId(c)
+		log.Info().
+			Str("method", "GET").
+			Str("viewerId", viewerId).
+			Str("streamId", streamId).
+			Msg("viewer called /snapshot/:streamId")
+
+		// if the server is restarted, need to force a new connection
+		streamId = streamId + runId
+		snapshot := clientConnectionManager.GetSnapshot(streamId)
+		return c.Blob(http.StatusOK, "image/jpg", snapshot.Bytes())
+	})
+
+	g.GET("/ice-config", func(c echo.Context) error {
 		log.Info().
 			Msg("client called /ice-config")
 
@@ -138,14 +183,19 @@ func StartSignalingServer(g *echo.Group) {
 			return c.String(http.StatusNotFound, "stream not found")
 		}
 
-		signal := utils.ParseBody[rtc.Signal](c)
-		signal.Value.ViewerId = viewerId
+		signals := utils.ParseBody[[]rtc.Signal](c)
+		for _, signal := range signals.Value {
+			signal.ViewerId = viewerId
+		}
 
 		if directConnect {
-			// forward the signal to the capture client
-			to_server_signal_buffers[streamId] = append(
-				to_server_signal_buffers[streamId],
-				signal.Value)
+			for _, signal := range signals.Value {
+				// forward the signal to the capture client
+				to_server_signal_buffers[streamId] = append(
+					to_server_signal_buffers[streamId],
+					signal)
+			}
+
 		} else {
 
 			// one instance for every capture client
@@ -206,9 +256,36 @@ func StartSignalingServer(g *echo.Group) {
 				sc.ConnectTo(vc)
 			}
 
-			vc.Signal(signal.Value)
+			for _, signal := range signals.Value {
+				// forward the signal to the capture client
+				vc.Signal(signal)
+			}
 
 		}
+
+		return c.String(http.StatusOK, "OK")
+	})
+
+	// Client route
+	g.POST("/snapshot/:streamId/internal", func(c echo.Context) error {
+
+		streamId := c.PathParam("streamId")
+		log.Info().
+			Str("method", "POST").
+			Str("streamId", streamId).
+			Msg("client called /snapshot/:streamId/internal")
+
+		// if the server is restarted, need to force a new connection
+		streamId = streamId + runId
+
+		buf, err := ioutil.ReadAll(c.Request().Body)
+
+		if err != nil {
+			return c.String(http.StatusBadRequest, err.Error())
+		}
+
+		buffer := bytes.NewBuffer(buf)
+		clientConnectionManager.SetSnapshot(streamId, buffer)
 
 		return c.String(http.StatusOK, "OK")
 	})
@@ -227,20 +304,8 @@ func StartSignalingServer(g *echo.Group) {
 
 	// Client route
 	g.GET("/signal/:streamId/internal", func(c echo.Context) error {
-
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Str("method", "GET").
-					Str("streamId", c.PathParam("streamId")).
-					Str("viewerId", c.QueryParam("viewerId")).
-					Str("error", fmt.Sprint(r)).
-					Msg("client called /signal/:streamId/internal")
-			}
-		}()
-
 		streamId := c.PathParam("streamId")
-		signals_to_send := make(chan []rtc.Signal, 0)
+		signals_to_send := make(chan []rtc.Signal)
 
 		log.Info().
 			Str("method", "GET").
@@ -249,6 +314,10 @@ func StartSignalingServer(g *echo.Group) {
 
 		// if the server is restarted, need to force a new connection
 		streamId = streamId + runId
+
+		if to_server_signal_buffers[streamId] == nil {
+			to_server_signal_buffers[streamId] = make([]rtc.Signal, 0)
+		}
 
 		go func() {
 			now := time.Now()
