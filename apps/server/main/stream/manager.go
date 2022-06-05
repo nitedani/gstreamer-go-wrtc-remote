@@ -12,9 +12,10 @@ import (
 )
 
 type ListStreamsResponseEntry struct {
-	StreamId string `json:"streamId"`
-	Viewers  int    `json:"viewers"`
-	Uptime   int    `json:"uptime"`
+	StreamId        string `json:"streamId"`
+	Viewers         int    `json:"viewers"`
+	Uptime          int    `json:"uptime"`
+	IsDirectConnect bool   `json:"directConnect"`
 }
 
 type Stream struct {
@@ -33,6 +34,7 @@ type Stream struct {
 	GetSignalsForViewer        func(viewerId string) chan []rtc.Signal
 	IsAvailable                func() bool
 	IsDirectConnect            bool
+	IsPrivate                  bool
 	GetUptime                  func() time.Duration
 }
 
@@ -214,6 +216,7 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 						to_viewer_signal_buffers[streamId][viewerId] =
 							append(to_viewer_signal_buffers[streamId][viewerId], signal)
 					})
+
 					return viewerConnection
 				},
 				GetViewer: func(viewerId string) *rtc.PeerConnection {
@@ -247,6 +250,14 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 					// allow receiving tracks from the capture client
 					conn.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly})
 					conn.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly})
+					dc, err := conn.CreateDataChannel("data", nil)
+					if err != nil {
+						log.Error().
+							Str("streamId", streamId).
+							Msg("failed to create data channel")
+					}
+
+					conn.DataChannel = dc
 
 					// initiate the peer connection with an offer to the capture client
 					conn.Initiate()
@@ -268,14 +279,15 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 			response := make([]ListStreamsResponseEntry, 0)
 
 			for streamId_runId, stream := range streams {
-				if !stream.IsAvailable() {
+				if !stream.IsAvailable() || stream.IsPrivate {
 					continue
 				}
 				streamId := streamId_runId[:len(streamId_runId)-len(runId)]
 				response = append(response, ListStreamsResponseEntry{
-					StreamId: streamId,
-					Viewers:  stream.GetViewerCount(),
-					Uptime:   int(stream.GetUptime().Seconds()),
+					StreamId:        streamId,
+					Viewers:         stream.GetViewerCount(),
+					Uptime:          int(stream.GetUptime().Seconds()),
+					IsDirectConnect: stream.IsDirectConnect,
 				})
 			}
 			return response

@@ -27,6 +27,7 @@ type Signaling struct {
 }
 type NewStreamBody struct {
 	IsDirectConnect bool `json:"isDirectConnect"`
+	IsPrivate       bool `json:"isPrivate"`
 }
 
 func Initialize() {
@@ -34,6 +35,7 @@ func Initialize() {
 	client := resty.New()
 	client.R().SetBody(NewStreamBody{
 		IsDirectConnect: config.IsDirectConnect,
+		IsPrivate:       config.IsPrivate,
 	}).
 		Post(fmt.Sprintf("%s/connect/%s/internal", config.SignalingServer, config.StreamId))
 
@@ -69,6 +71,7 @@ func PollSignals() chan Signal {
 			res, err := client.R().
 				SetHeader("Accept", "application/json").
 				SetQueryParam("isDirectConnect", fmt.Sprintf("%v", config.IsDirectConnect)).
+				SetQueryParam("isPrivate", fmt.Sprintf("%v", config.IsPrivate)).
 				Get(fmt.Sprintf("%s/signal/%s/internal", config.SignalingServer, config.StreamId))
 
 			if err != nil {

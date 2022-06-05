@@ -2,6 +2,7 @@ package rtc
 
 import (
 	"github.com/olebedev/emitter"
+	"github.com/pion/webrtc/v3"
 )
 
 type ConnectionManager struct {
@@ -50,6 +51,12 @@ func NewConnectionManager() *ConnectionManager {
 						e.Emit("alldisconnected")
 					}()
 				}
+			})
+
+			connection.OnDataChannel(func(dc *webrtc.DataChannel) {
+
+				connection.DataChannel = dc
+
 			})
 
 			return connection

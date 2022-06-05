@@ -34,7 +34,8 @@ const buildCaptureWin = async () => {
   const TMParchivePath = join(TMPpath, 'capture-win64.7z');
 
   const finalPath = join(distPath, 'capture-win64');
-  const finalExecutablePath = join(finalPath, 'capture-win64.exe');
+  const finalAutorunExecutablePath = join(finalPath, 'capture-win64.exe');
+  const finalSfxexecutablePath = join(finalPath, 'capture-win64.sfx.exe');
   mkdirSync(finalPath);
 
   const buildEnv = {
@@ -52,12 +53,12 @@ const buildCaptureWin = async () => {
       'pkgconfig',
     )}`,
   };
-
+  /*
   await exec(`cd ${streamServerDir}\\main && go clean -cache`, {
     stdio: 'inherit',
     env: { ...process.env, ...buildEnv },
   });
-
+*/
   await exec(
     `cd ${streamServerDir}\\main && go build -ldflags=\"-s -w -H windowsgui\" -v -o ${TMPbuildPath}`,
     {
@@ -77,11 +78,20 @@ main.exe %1`;
 
   writeFileSync(join(TMPpath, 'start.bat'), startupScript);
 
-  const sfxScript = `
+  const sfxAutorunScript = `
 ;!@Install@!UTF-8!
 GUIMode="2"
 ExecuteFile="start.bat"
 ExecuteParameters="%%S\\config.json"
+;!@InstallEnd@!`;
+
+  const sfxAutorunScriptPath = join(TMPpath, 'sfx-autorun.txt');
+  writeFileSync(sfxAutorunScriptPath, sfxAutorunScript);
+
+  const sfxScript = `
+;!@Install@!UTF-8!
+InstallPath="%%S/screen-capture"
+GUIMode="2"
 ;!@InstallEnd@!`;
 
   const sfxScriptPath = join(TMPpath, 'sfx.txt');
@@ -105,9 +115,17 @@ ExecuteParameters="%%S\\config.json"
     },
   );
 
+  //Make sfx autorun exe
+  await exec(
+    `COPY /b "${sfxFilePath}" + "${sfxAutorunScriptPath}" + "${TMParchivePath}" "${finalAutorunExecutablePath}"`,
+    {
+      stdio: 'inherit',
+    },
+  );
+
   //Make sfx exe
   await exec(
-    `COPY /b "${sfxFilePath}" + "${sfxScriptPath}" + "${TMParchivePath}" "${finalExecutablePath}"`,
+    `COPY /b "${sfxFilePath}" + "${sfxScriptPath}" + "${TMParchivePath}" "${finalSfxexecutablePath}"`,
     {
       stdio: 'inherit',
     },

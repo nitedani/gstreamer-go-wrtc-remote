@@ -16,6 +16,7 @@ import (
 
 type NewStreamBody struct {
 	IsDirectConnect bool `json:"isDirectConnect"`
+	IsPrivate       bool `json:"isPrivate"`
 }
 
 var runId = utils.RandomStr()
@@ -125,6 +126,7 @@ func StartSignalingServer(g *echo.Group) {
 				viewerConnection = stream.NewViewer(viewerId)
 				// build the pipeline: capture client -> server -> viewer
 				stream.Connection.ConnectTo(viewerConnection)
+
 			}
 
 			for _, signal := range signals.Value {
@@ -165,6 +167,7 @@ func StartSignalingServer(g *echo.Group) {
 		stream := streamManager.NewStream(streamId)
 		body := utils.ParseBody[NewStreamBody](c)
 		stream.IsDirectConnect = body.Value.IsDirectConnect
+		stream.IsPrivate = body.Value.IsPrivate
 		return c.String(http.StatusOK, "OK")
 	})
 
@@ -172,8 +175,10 @@ func StartSignalingServer(g *echo.Group) {
 	g.GET("/signal/:streamId/internal", func(c echo.Context) error {
 		streamId := c.PathParam("streamId")
 		isDirectConnect := c.QueryParam("isDirectConnect")
+		isPrivate := c.QueryParam("isPrivate")
 		// parse bool
 		isDirectConnectBool, _ := strconv.ParseBool(isDirectConnect)
+		isPrivateBool, _ := strconv.ParseBool(isPrivate)
 		signals_to_send := make(chan []rtc.Signal)
 
 		log.Info().
@@ -187,6 +192,7 @@ func StartSignalingServer(g *echo.Group) {
 		if stream == nil {
 			stream = streamManager.NewStream(streamId)
 			stream.IsDirectConnect = isDirectConnectBool
+			stream.IsPrivate = isPrivateBool
 		}
 		go func() {
 			for {

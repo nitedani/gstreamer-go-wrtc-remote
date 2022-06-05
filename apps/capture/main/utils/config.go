@@ -31,6 +31,7 @@ type ConfigFileSettings struct {
 	StreamId        string `json:"stream_id"`
 	RemoteEnabled   bool   `json:"remote_enabled"`
 	IsDirectConnect bool   `json:"direct_connect"`
+	IsPrivate       bool   `json:"private"`
 	Bitrate         int    `json:"bitrate"`
 	Resolution      string `json:"resolution"`
 	Framerate       int    `json:"framerate"`
@@ -45,6 +46,7 @@ type ConfigFile struct {
 type Config struct {
 	RemoteEnabled   bool
 	IsDirectConnect bool
+	IsPrivate       bool
 	SignalingServer string
 	StreamId        string
 	Bitrate         int
@@ -90,6 +92,7 @@ func initConfig() {
 	config = &Config{
 		RemoteEnabled:   settings.RemoteEnabled,
 		IsDirectConnect: settings.IsDirectConnect,
+		IsPrivate:       settings.IsPrivate,
 		SignalingServer: settings.SignalingServer,
 		StreamId:        settings.StreamId,
 		Bitrate:         settings.Bitrate,

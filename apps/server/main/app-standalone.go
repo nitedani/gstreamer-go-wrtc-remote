@@ -43,7 +43,11 @@ func main() {
 		if port == "" {
 			port = "3000"
 		}
-		e.Static("/", "webapp")
+		e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
+			Root:  "webapp",
+			Index: "index.html",
+			HTML5: true,
+		}))
 		e.Start(":" + port)
 
 	} else {

@@ -34,6 +34,7 @@ type PeerConnection struct {
 	PendingCandidates []*webrtc.ICECandidate
 	SetSnapshot       func(snapshot *bytes.Buffer)
 	GetSnapshot       func() *bytes.Buffer
+	DataChannel       *webrtc.DataChannel
 	*webrtc.PeerConnection
 	*emitter.Emitter
 }
@@ -200,6 +201,24 @@ func (peerConnection *PeerConnection) Initiate() {
 
 }
 
+func connectDatachannel(a *PeerConnection, b *PeerConnection) {
+	if a.DataChannel != nil {
+		a.DataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
+			if b.DataChannel != nil {
+				b.DataChannel.Send(msg.Data)
+			}
+		})
+	} else {
+		a.OnDataChannel(func(dc *webrtc.DataChannel) {
+			dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+				if b.DataChannel != nil {
+					b.DataChannel.Send(msg.Data)
+				}
+			})
+		})
+	}
+}
+
 func newConnection(Id string) (peerConnection *PeerConnection) {
 	e := &emitter.Emitter{}
 	//e.Use("*", emitter.Void)
@@ -289,36 +308,41 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 			}
 			processRTCP(rtpSender)
 		},
+
 		ConnectTo: func(other *PeerConnection) {
+
+			connectDatachannel(peerConnection, other)
+			connectDatachannel(other, peerConnection)
+
 			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateConnected {
 				if len(peerConnection.LocalTracks) > 0 {
 					for _, track := range peerConnection.LocalTracks {
 						other.AddTrack(track)
 					}
 				}
-				return
+			} else {
+				peerConnection.OnConnected(func() {
+					time.Sleep(time.Millisecond * 1000)
+					if len(peerConnection.LocalTracks) > 0 {
+
+						for _, track := range peerConnection.LocalTracks {
+							other.AddTrack(track)
+						}
+						time.Sleep(time.Millisecond * 1000)
+						// re-negotiate with the browser
+						other.Initiate()
+
+					}
+					peerConnection.On("track", func(e *emitter.Event) {
+						track := e.Args[0].(*webrtc.TrackLocalStaticRTP)
+						other.AddTrack(track)
+						// re-negotiate with the browser
+						other.Initiate()
+
+					})
+				})
 			}
 
-			peerConnection.OnConnected(func() {
-				time.Sleep(time.Millisecond * 1000)
-				if len(peerConnection.LocalTracks) > 0 {
-
-					for _, track := range peerConnection.LocalTracks {
-						other.AddTrack(track)
-					}
-					time.Sleep(time.Millisecond * 1000)
-					// re-negotiate with the browser
-					other.Initiate()
-
-				}
-				peerConnection.On("track", func(e *emitter.Event) {
-					track := e.Args[0].(*webrtc.TrackLocalStaticRTP)
-					other.AddTrack(track)
-					// re-negotiate with the browser
-					other.Initiate()
-
-				})
-			})
 		},
 		SetSnapshot: func(_snapshot *bytes.Buffer) {
 			snapshot = _snapshot

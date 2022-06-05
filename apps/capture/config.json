@@ -1,8 +1,9 @@
 {
   "settings": {
     "stream_id": "stream_test",
-    "remote_enabled": false,
-    "direct_connect": true,
+    "private": false,
+    "remote_enabled": true,
+    "direct_connect": false,
     "bitrate": 10388600,
     "resolution": "1920x1080",
     "framerate": 60,
