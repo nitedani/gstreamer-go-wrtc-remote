@@ -14,8 +14,6 @@ func WinVP8Pipeline() string {
 	bitrate := config.Bitrate
 	threads := config.Threads
 
-	frames_num, _ := strconv.Atoi(framerate)
-
 	pipelinearr_vp8 := []string{
 		"d3d11screencapturesrc",
 		"monitor-index=0",
@@ -34,20 +32,20 @@ func WinVP8Pipeline() string {
 		"queue2",
 		"max-size-buffers=0",
 		"max-size-bytes=0",
-		"max-size-time=" + strconv.Itoa((1000000000/frames_num)*2),
+		"max-size-time=" + strconv.Itoa((1000000000/framerate)*2),
 		"!",
 
 		//Optimize for framerate
 		"vp8enc",
-		"threads=" + threads,
+		"threads=" + strconv.Itoa(threads),
 		"deadline=1",
 		"max-quantizer=40",
 		"min-quantizer=4",
-		"max-intra-bitrate=" + bitrate,
-		"target-bitrate=" + bitrate,
+		"max-intra-bitrate=" + strconv.Itoa(bitrate),
+		"target-bitrate=" + strconv.Itoa(bitrate),
 		"!",
 
-		fmt.Sprintf("video/x-vp8,framerate=%s/1,width=%s,height=%s", framerate, width, height),
+		fmt.Sprintf("video/x-vp8,framerate=%d/1,width=%s,height=%s", framerate, width, height),
 		"!",
 
 		"appsink",
@@ -63,7 +61,7 @@ func WinOpenH264Pipeline() string {
 	height := config.ResolutionY
 	bitrate := config.Bitrate
 	threads := config.Threads
-	frames_num, _ := strconv.Atoi(framerate)
+
 	pipelinearr_openh264 := []string{
 		"d3d11screencapturesrc",
 		"monitor-index=0",
@@ -76,22 +74,22 @@ func WinOpenH264Pipeline() string {
 		"d3d11download",
 		"!",
 
-		fmt.Sprintf("video/x-raw,framerate=%s/1,width=%s,height=%s", framerate, width, height),
+		fmt.Sprintf("video/x-raw,framerate=%d/1,width=%s,height=%s", framerate, width, height),
 		"!",
 
 		"queue2",
 		"max-size-buffers=0",
 		"max-size-bytes=0",
-		"max-size-time=" + strconv.Itoa((1000000000/frames_num)*2),
+		"max-size-time=" + strconv.Itoa((1000000000/framerate)*2),
 		"!",
 
 		//Optimize for framerate
 		"openh264enc",
 		"enable-frame-skip=true",
 		"deblocking=1",
-		"bitrate=" + bitrate,
+		"bitrate=" + strconv.Itoa(bitrate),
 		"complexity=0",
-		"multi-thread=" + threads,
+		"multi-thread=" + strconv.Itoa(threads),
 		"qp-max=40",
 		"slice-mode=5",
 		"!",
@@ -112,8 +110,7 @@ func WinNvH264Pipeline() string {
 	width := config.ResolutionX
 	height := config.ResolutionY
 	bitrate := config.Bitrate
-	frames_num, _ := strconv.Atoi(framerate)
-	bitrate_int, _ := strconv.Atoi(bitrate)
+
 	pipelinearr_nvenc := []string{
 		"d3d11screencapturesrc",
 		"monitor-index=0",
@@ -126,13 +123,13 @@ func WinNvH264Pipeline() string {
 		"d3d11download",
 		"!",
 
-		fmt.Sprintf("video/x-raw,format=NV12,framerate=%s/1,width=%s,height=%s", framerate, width, height),
+		fmt.Sprintf("video/x-raw,format=NV12,framerate=%d/1,width=%s,height=%s", framerate, width, height),
 		"!",
 
 		"queue2",
 		"max-size-buffers=0",
 		"max-size-bytes=0",
-		"max-size-time=" + strconv.Itoa((1000000000/frames_num)*2),
+		"max-size-time=" + strconv.Itoa((1000000000/framerate)*2),
 		"!",
 
 		//Optimize for framerate
@@ -141,7 +138,7 @@ func WinNvH264Pipeline() string {
 		"rc-mode=5",
 		"zerolatency=true",
 		//Convert bitrate from bits to kbits
-		"bitrate=" + strconv.Itoa(bitrate_int/1024),
+		"bitrate=" + strconv.Itoa(bitrate/1024),
 		"!",
 
 		"h264parse",

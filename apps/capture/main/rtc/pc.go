@@ -3,7 +3,6 @@ package rtc
 import (
 	"capture/main/utils"
 	"fmt"
-	"os"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/olebedev/emitter"
@@ -29,10 +28,8 @@ type ICEServer struct {
 }
 
 func (peerConnection *PeerConnection) initializeConnection() {
-	signalingServer, hasEnv := os.LookupEnv("SERVER_URL")
-	if !hasEnv {
-		panic("SERVER_URL not set")
-	}
+	config := utils.GetConfig()
+	signalingServer := config.SignalingServer
 
 	//Get ice server config from the signalserver
 	client := resty.New()

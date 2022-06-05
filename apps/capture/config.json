@@ -1,0 +1,13 @@
+{
+  "settings": {
+    "stream_id": "stream_test",
+    "remote_enabled": false,
+    "direct_connect": true,
+    "bitrate": 10388600,
+    "resolution": "1920x1080",
+    "framerate": 60,
+    "encoder": "nvenc",
+    "threads": 4,
+    "server_url": "http://localhost:4000/api"
+  }
+}

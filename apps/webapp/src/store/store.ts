@@ -3,7 +3,7 @@ import { persist, subscribeWithSelector } from 'zustand/middleware';
 export interface Settings {
   theme: string;
   volume: number;
-  setVolume(volume: number): void;
+  setVolume: any;
 }
 
 export const useStore = create<

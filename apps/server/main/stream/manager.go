@@ -32,6 +32,7 @@ type Stream struct {
 	GetSignalsForCaptureClient func() chan []rtc.Signal
 	GetSignalsForViewer        func(viewerId string) chan []rtc.Signal
 	IsAvailable                func() bool
+	IsDirectConnect            bool
 	GetUptime                  func() time.Duration
 }
 
@@ -124,12 +125,14 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 					snapshot = _snapshot
 				},
 				SignalToCaptureClient: func(signal rtc.Signal) error {
+
 					to_client_signal_buffers[streamId] = append(to_client_signal_buffers[streamId], signal)
 					return nil
 				},
 				SignalFromCaptureClient: func(signal rtc.Signal) error {
 					keepAlive()
 					viewerId := signal.ViewerId
+
 					if to_viewer_signal_buffers[streamId] == nil {
 						to_viewer_signal_buffers[streamId] = make(map[string][]rtc.Signal, 0)
 					}
@@ -157,6 +160,7 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 
 							if len(to_client_signal_buffers[streamId]) > 0 {
 								signals_to_send <- (to_client_signal_buffers[streamId])
+
 								to_client_signal_buffers[streamId] = make([]rtc.Signal, 0)
 								return
 							}

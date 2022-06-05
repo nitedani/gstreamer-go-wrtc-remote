@@ -14,7 +14,7 @@
 
 ### Features
 
-- Video - 4K120 (using the nvenc encoder)
+- Video - 4K120
 - Audio
 - Remote control (work in progress)
 
@@ -67,27 +67,30 @@ TURN_SERVER_PASSWORD=
 
 ## Setting up the capture client:
 
-1. Edit client-win64/config
+1. Edit client-win64/config.json
 2. Run client-win64.exe
 
-Default capture client config:
-
-The capture client respects the host environment variables over the config file.
+Default capture client config.json:
 
 ```
-SERVER_URL=http://localhost:4000/api
-STREAM_ID=default
-REMOTE_ENABLED=false
-BITRATE=10485760
-RESOLUTION=1920x1080
-FRAMERATE=60
-THREADS=4
-ENCODER=nvenc # best, but only for nvidia
-#ENCODER=vp8  # second best
-#ENCODER=h264 # it's ok
+{
+  "settings": {
+    "server_url": "http://localhost:4000/api",
+    "stream_id": "stream_test",
+    "remote_enabled": false,
+    "direct_connect": true,
+    "bitrate": 10388600,
+    "resolution": "1920x1080",
+    "framerate": 60,
+    "encoder": "nvenc",
+    "threads": 4
+  }
+}
+
 ```
 
-With the configuration above, the stream is available on: http://localhost:4000?streamId=default
+With the configuration above, the stream is available on: http://localhost:4000?streamId=stream_test
+direct_connect set on the client overrides the server setting
 
 ## Development:
 

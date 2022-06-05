@@ -44,7 +44,6 @@ func NewVideoCapture() *ControlledCapture {
 				continue
 			}
 
-			time.Sleep(time.Second)
 			per_buffer := buffer_len / int64(frames)
 
 			log.Info().

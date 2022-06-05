@@ -29,6 +29,7 @@ func StartWrtcServer() {
 	})
 
 	signaling.OnSignal(func(signal rtc.Signal) {
+
 		viewerId := signal.ViewerId
 		connection := connectionManager.GetConnection(viewerId)
 

@@ -1,24 +1,58 @@
 package utils
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog/log"
 )
 
+/*
+{
+  "settings": {
+    "stream_id": "default",
+    "remote_enabled": false,
+    "direct_connect": true,
+    "bitrate": 15388600,
+    "resolution": "1920x1080",
+    "framerate": 90,
+    "encoder": "nvenc",
+    "threads": 4,
+    "server_url": "http://localhost:4000/api"
+  }
+}
+
+*/
+
+type ConfigFileSettings struct {
+	StreamId        string `json:"stream_id"`
+	RemoteEnabled   bool   `json:"remote_enabled"`
+	IsDirectConnect bool   `json:"direct_connect"`
+	Bitrate         int    `json:"bitrate"`
+	Resolution      string `json:"resolution"`
+	Framerate       int    `json:"framerate"`
+	Encoder         string `json:"encoder"`
+	Threads         int    `json:"threads"`
+	SignalingServer string `json:"server_url"`
+}
+type ConfigFile struct {
+	Settigs ConfigFileSettings `json:"settings"`
+}
+
 type Config struct {
 	RemoteEnabled   bool
+	IsDirectConnect bool
 	SignalingServer string
 	StreamId        string
-	Bitrate         string
+	Bitrate         int
 	Resolution      string
 	ResolutionX     string
 	ResolutionY     string
-	Framerate       string
-	Threads         string
+	Framerate       int
+	Threads         int
 	Encoder         string
 }
 
@@ -33,69 +67,38 @@ type MediaConfig struct {
 var config *Config
 
 func initConfig() {
-	remoteEnabled, hasEnv := os.LookupEnv("REMOTE_ENABLED")
-	if !hasEnv {
-		remoteEnabled = "false"
-	}
 
-	remoteEnabledBool, err := strconv.ParseBool(remoteEnabled)
+	configPath := os.Args[1]
+
+	jsonFile, err := os.Open(configPath)
 	if err != nil {
-		log.Err(err).Msg("Failed to parse REMOTE_ENABLED")
-		remoteEnabledBool = false
+		log.Fatal().Msgf("Error opening config file: %s", err)
+	}
+	var parsedConfig ConfigFile
+	byteValue, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		log.Fatal().Msgf("Error reading config file: %s", err)
 	}
 
-	signalingServer, hasEnv := os.LookupEnv("SERVER_URL")
-	if !hasEnv {
-		panic("SERVER_URL not set")
+	err = json.Unmarshal(byteValue, &parsedConfig)
+	if err != nil {
+		log.Fatal().Msgf("Error parsing config file: %s", err)
 	}
-
-	streamId, hasEnv := os.LookupEnv("STREAM_ID")
-	if !hasEnv {
-		panic("STREAM_ID not set")
-	}
-
-	bitrate, hasEnv := os.LookupEnv("BITRATE")
-	if !hasEnv {
-		log.Info().Msg("No bitrate specified, defaulting to 5Mbps")
-		bitrate = "5242880"
-	}
-
-	resolution, hasEnv := os.LookupEnv("RESOLUTION")
-	if !hasEnv {
-		log.Info().Msg("No resolution specified, defaulting to 1280x720")
-		resolution = "1280x720"
-	}
-	sizes := strings.Split(resolution, "x")
-
-	framerate, hasEnv := os.LookupEnv("FRAMERATE")
-	if !hasEnv {
-		log.Info().Msg("No framerate specified, defaulting to 30fps")
-		framerate = "30"
-	}
-
-	threads, hasEnv := os.LookupEnv("THREADS")
-	if !hasEnv {
-		log.Info().Msg("No threads specified, defaulting to 2")
-		threads = "2"
-	}
-
-	encoder, hasEnv := os.LookupEnv("ENCODER")
-	if !hasEnv {
-		log.Info().Msg("No encoder specified, defaulting to vp8")
-		encoder = "vp8"
-	}
+	settings := parsedConfig.Settigs
+	sizes := strings.Split(settings.Resolution, "x")
 
 	config = &Config{
-		RemoteEnabled:   remoteEnabledBool,
-		SignalingServer: signalingServer,
-		StreamId:        streamId,
-		Bitrate:         bitrate,
-		Resolution:      resolution,
+		RemoteEnabled:   settings.RemoteEnabled,
+		IsDirectConnect: settings.IsDirectConnect,
+		SignalingServer: settings.SignalingServer,
+		StreamId:        settings.StreamId,
+		Bitrate:         settings.Bitrate,
+		Resolution:      settings.Resolution,
 		ResolutionX:     sizes[0],
 		ResolutionY:     sizes[1],
-		Framerate:       framerate,
-		Threads:         threads,
-		Encoder:         encoder,
+		Framerate:       settings.Framerate,
+		Threads:         settings.Threads,
+		Encoder:         settings.Encoder,
 	}
 
 }

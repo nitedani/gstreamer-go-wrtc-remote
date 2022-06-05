@@ -49,6 +49,7 @@ require (
 	github.com/vcaesar/imgo v0.30.0 // indirect
 	github.com/vcaesar/keycode v0.10.0 // indirect
 	github.com/vcaesar/tt v0.20.0 // indirect
+	github.com/webview/webview v0.0.0-20220507210603-42b68f4dda20 // indirect
 	golang.org/x/crypto v0.0.0-20220131195533-30dcbda58838 // indirect
 	golang.org/x/image v0.0.0-20211028202545-6944b10bf410 // indirect
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect

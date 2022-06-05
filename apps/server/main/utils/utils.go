@@ -105,6 +105,7 @@ func SortSignals(signals []rtc.Signal) []rtc.Signal {
 	//offers come before candidates
 	sortedSignals := make([]rtc.Signal, 0)
 	for _, signal := range signals {
+
 		if signal.Type == "offer" {
 			sortedSignals = append(sortedSignals, signal)
 		}

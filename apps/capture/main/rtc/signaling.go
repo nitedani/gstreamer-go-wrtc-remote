@@ -25,12 +25,18 @@ type Signaling struct {
 	Signal   func(signal Signal)
 	OnSignal func(cb func(signal Signal))
 }
+type NewStreamBody struct {
+	IsDirectConnect bool `json:"isDirectConnect"`
+}
 
 func Initialize() {
 	config := utils.GetConfig()
 	client := resty.New()
-	client.R().
+	client.R().SetBody(NewStreamBody{
+		IsDirectConnect: config.IsDirectConnect,
+	}).
 		Post(fmt.Sprintf("%s/connect/%s/internal", config.SignalingServer, config.StreamId))
+
 	log.Info().Str("streamId", config.StreamId).Msg("Connected")
 }
 
@@ -62,6 +68,7 @@ func PollSignals() chan Signal {
 		for {
 			res, err := client.R().
 				SetHeader("Accept", "application/json").
+				SetQueryParam("isDirectConnect", fmt.Sprintf("%v", config.IsDirectConnect)).
 				Get(fmt.Sprintf("%s/signal/%s/internal", config.SignalingServer, config.StreamId))
 
 			if err != nil {
@@ -71,6 +78,7 @@ func PollSignals() chan Signal {
 			}
 			body := utils.ParseJson[[]Signal](res)
 			for _, signal := range body.Value {
+				log.Printf("Received signal from %s", signal.ViewerId)
 				signalsChan <- signal
 			}
 			time.Sleep(time.Second * 1)

@@ -2,6 +2,7 @@ const { join, resolve } = require('path');
 const chokidar = require('chokidar');
 const { spawn, exec } = require('child_process');
 const colorette = require('colorette');
+const { copySync } = require('fs-extra');
 
 let cpCapture = null;
 let cpServer = null;
@@ -14,7 +15,7 @@ const spawnCapture = () => {
   const buildEnv = {
     CGO_ENABLED: 1,
     CGO_CFLAGS: `-I${captureDir}\\gstreamer\\include`,
-    CGO_LDFLAGS: `-L${captureDir}\\gstreamer\\lib`,
+    CGO_LDFLAGS: `-L${captureDir}\\gstreamer\\lib -L${captureDir}\\dll\\x64`,
     PKG_CONFIG_PATH: `${captureDir}\\gstreamer\\lib\\pkgconfig`,
   };
 
@@ -28,11 +29,22 @@ const spawnCapture = () => {
     cpCapture = null;
   }
 
-  const binPath = join(baseDir, 'dist', 'stream.exe');
-  const builder = exec(`cd ${captureDir}\\main && go build -v -o ${binPath}`, {
-    stdio: 'inherit',
-    env: { ...process.env, ...buildEnv },
-  });
+  const webviewDlls = join(captureDir, 'dll', 'x64');
+  const distPath = join(baseDir, 'dist');
+
+  try {
+    // copy webview dlls to dist
+    copySync(webviewDlls, distPath);
+  } catch (error) {}
+
+  const binPath = join(distPath, 'stream.exe');
+  const builder = exec(
+    `cd ${captureDir}\\main && go build -ldflags="-H windowsgui" -v -o ${binPath}`,
+    {
+      stdio: 'inherit',
+      env: { ...process.env, ...buildEnv },
+    },
+  );
 
   builder.stdout.pipe(process.stdout);
   builder.stderr.pipe(process.stderr);
@@ -43,7 +55,7 @@ const spawnCapture = () => {
         return;
       }
       console.log(colorette.blueBright('Starting capture...'));
-      cpCapture = spawn(binPath, [`${captureDir}\\.env`], {
+      cpCapture = spawn(binPath, [`${captureDir}\\config.json`], {
         stdio: 'inherit',
         env: { ...process.env, ...runtimeEnv },
       });

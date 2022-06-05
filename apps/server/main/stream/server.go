@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 
 	"signaling/main/rtc"
 	"signaling/main/utils"
@@ -12,6 +13,10 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
+
+type NewStreamBody struct {
+	IsDirectConnect bool `json:"isDirectConnect"`
+}
 
 var runId = utils.RandomStr()
 
@@ -98,14 +103,14 @@ func StartSignalingServer(g *echo.Group) {
 		}
 
 		signals := utils.ParseBody[[]rtc.Signal](c)
-		for _, signal := range signals.Value {
-			signal.ViewerId = viewerId
-		}
 
-		if directConnect {
+		if directConnect || stream.IsDirectConnect {
+			log.Info().Msg("direct connect")
 			for _, signal := range signals.Value {
+				signal.ViewerId = viewerId
 				// forward the signal to the capture client
 				// build the connection between the viewer and capture client
+
 				stream.SignalToCaptureClient(signal)
 			}
 		} else {
@@ -116,12 +121,14 @@ func StartSignalingServer(g *echo.Group) {
 
 			viewerConnection := stream.GetViewer(viewerId)
 			if viewerConnection == nil {
+
 				viewerConnection = stream.NewViewer(viewerId)
 				// build the pipeline: capture client -> server -> viewer
 				stream.Connection.ConnectTo(viewerConnection)
 			}
 
 			for _, signal := range signals.Value {
+				signal.ViewerId = viewerId
 				// build the connection between the server and viewer
 				viewerConnection.Signal(signal)
 			}
@@ -155,13 +162,18 @@ func StartSignalingServer(g *echo.Group) {
 		streamId := c.PathParam("streamId")
 		// if the server is restarted, need to force a new connection
 		streamId = streamId + runId
-		streamManager.NewStream(streamId)
+		stream := streamManager.NewStream(streamId)
+		body := utils.ParseBody[NewStreamBody](c)
+		stream.IsDirectConnect = body.Value.IsDirectConnect
 		return c.String(http.StatusOK, "OK")
 	})
 
 	// Client route
 	g.GET("/signal/:streamId/internal", func(c echo.Context) error {
 		streamId := c.PathParam("streamId")
+		isDirectConnect := c.QueryParam("isDirectConnect")
+		// parse bool
+		isDirectConnectBool, _ := strconv.ParseBool(isDirectConnect)
 		signals_to_send := make(chan []rtc.Signal)
 
 		log.Info().
@@ -174,6 +186,7 @@ func StartSignalingServer(g *echo.Group) {
 		stream := streamManager.GetStream(streamId)
 		if stream == nil {
 			stream = streamManager.NewStream(streamId)
+			stream.IsDirectConnect = isDirectConnectBool
 		}
 		go func() {
 			for {
@@ -181,6 +194,7 @@ func StartSignalingServer(g *echo.Group) {
 				case <-c.Request().Context().Done():
 					return
 				case signals := <-stream.GetSignalsForCaptureClient():
+
 					signals_to_send <- signals
 				}
 			}
@@ -203,8 +217,9 @@ func StartSignalingServer(g *echo.Group) {
 		streamId = streamId + runId
 		stream := streamManager.GetStream(streamId)
 
-		if directConnect {
+		if directConnect || stream.IsDirectConnect {
 			for _, signal := range signals.Value {
+
 				stream.SignalFromCaptureClient(signal)
 			}
 		} else {

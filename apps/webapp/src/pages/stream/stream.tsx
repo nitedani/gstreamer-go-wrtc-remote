@@ -7,6 +7,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import {
   Backdrop,
   Box,
+  Button,
   CircularProgress,
   IconButton,
   Slider,
@@ -50,6 +51,8 @@ export const Stream = () => {
     },
     [],
   );
+
+  console.log(volume);
 
   // eslint-disable-next-line sonarjs/cognitive-complexity
   useEffect(() => {
@@ -173,7 +176,7 @@ export const Stream = () => {
 
         videoRef.current!.onplay = () => {
           setLoading(false);
-          videoRef.current!.muted = false;
+          // videoRef.current!.muted = false;
           videoRef.current!.volume = volume;
         };
 
@@ -263,7 +266,14 @@ export const Stream = () => {
         />
       </Backdrop>
       <div className="video-container">
-        <video className="video-height" muted autoPlay ref={videoRef}></video>
+        <video
+          className="video-height"
+          muted
+          autoPlay
+          playsInline
+          loop
+          ref={videoRef}
+        ></video>
         {!loading && (
           <div className="controls">
             <IconButton
@@ -292,21 +302,32 @@ export const Stream = () => {
               <FullscreenIcon />
             </IconButton>
             <div className="volume-container">
-              <Stack
-                spacing={2}
-                direction="row"
-                sx={{ mb: 1 }}
-                alignItems="center"
-              >
-                <VolumeDown fontSize="small" />
-                <Slider
-                  aria-label="Volume"
-                  value={volume * 100}
-                  onChange={handleVolumeChange}
-                  size="small"
-                />
-                <VolumeUp fontSize="small" />
-              </Stack>
+              {videoRef.current!.muted && volume !== 0 ? (
+                <Button
+                  onClick={() => {
+                    videoRef.current!.muted = false;
+                    useStore.setState((s) => ({ ...s }));
+                  }}
+                >
+                  Unmute
+                </Button>
+              ) : (
+                <Stack
+                  spacing={2}
+                  direction="row"
+                  sx={{ mb: 1 }}
+                  alignItems="center"
+                >
+                  <VolumeDown fontSize="small" />
+                  <Slider
+                    aria-label="Volume"
+                    value={volume * 100}
+                    onChange={handleVolumeChange}
+                    size="small"
+                  />
+                  <VolumeUp fontSize="small" />
+                </Stack>
+              )}
             </div>
           </div>
         )}

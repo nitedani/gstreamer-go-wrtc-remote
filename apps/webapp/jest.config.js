@@ -1,5 +1,5 @@
 module.exports = {
-  rootDir: 'src',
+  rootDir: '.',
   preset: 'ts-jest',
   globals: {
     'ts-jest': {

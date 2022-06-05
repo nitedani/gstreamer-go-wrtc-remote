@@ -13,7 +13,6 @@ const webpack = require('webpack');
 const distPath = join(cwd(), 'dist');
 const sfxPath = join(cwd(), 'sfx');
 const sfxFilePath = join(sfxPath, '7z.sfx');
-const sfxConfigPath = join(sfxPath, 'sfx.txt');
 const makeselfPath = join(sfxPath, 'makeself', 'makeself.sh');
 
 const runWebpack = (compiler) =>
@@ -28,6 +27,7 @@ const streamServerDir = join(baseDir, 'apps', 'capture');
 const serverDir = join(baseDir, 'apps', 'server');
 
 const buildCaptureWin = async () => {
+  const webviewDlls = join(streamServerDir, 'dll', 'x64');
   const gstreamerDlls = join(streamServerDir, 'gstreamer', 'dll');
   const TMPpath = mkdtempSync(join(os.tmpdir(), 'build-win64-'));
   const TMPbuildPath = join(TMPpath, 'main.exe');
@@ -40,7 +40,11 @@ const buildCaptureWin = async () => {
   const buildEnv = {
     CGO_ENABLED: 1,
     CGO_CFLAGS: `-I${join(streamServerDir, 'gstreamer', 'include')}`,
-    CGO_LDFLAGS: `-L${join(streamServerDir, 'gstreamer', 'lib')}`,
+    CGO_LDFLAGS: `-L${join(streamServerDir, 'gstreamer', 'lib')} -L${join(
+      streamServerDir,
+      'dll',
+      'x64',
+    )}`,
     PKG_CONFIG_PATH: `${join(
       streamServerDir,
       'gstreamer',
@@ -55,7 +59,7 @@ const buildCaptureWin = async () => {
   });
 
   await exec(
-    `cd ${streamServerDir}\\main && go build -ldflags=\"-s -w\" -v -o ${TMPbuildPath}`,
+    `cd ${streamServerDir}\\main && go build -ldflags=\"-s -w -H windowsgui\" -v -o ${TMPbuildPath}`,
     {
       stdio: 'inherit',
       env: { ...process.env, ...buildEnv },
@@ -73,6 +77,16 @@ main.exe %1`;
 
   writeFileSync(join(TMPpath, 'start.bat'), startupScript);
 
+  const sfxScript = `
+;!@Install@!UTF-8!
+GUIMode="2"
+ExecuteFile="start.bat"
+ExecuteParameters="%%S\\config.json"
+;!@InstallEnd@!`;
+
+  const sfxScriptPath = join(TMPpath, 'sfx.txt');
+  writeFileSync(sfxScriptPath, sfxScript);
+
   spawnSync(
     path7za,
     [
@@ -83,6 +97,8 @@ main.exe %1`;
       join(TMPpath, '*'),
       //gstreamer dlls
       join(gstreamerDlls, '*'),
+      //webview dlls
+      join(webviewDlls, '*'),
     ],
     {
       stdio: 'inherit',
@@ -91,26 +107,29 @@ main.exe %1`;
 
   //Make sfx exe
   await exec(
-    `COPY /b "${sfxFilePath}" + "${sfxConfigPath}" + "${TMParchivePath}" "${finalExecutablePath}"`,
+    `COPY /b "${sfxFilePath}" + "${sfxScriptPath}" + "${TMParchivePath}" "${finalExecutablePath}"`,
     {
       stdio: 'inherit',
     },
   );
 
   const exampleConfig = `\
-SERVER_URL=http://localhost:4000/api
-STREAM_ID=default
-REMOTE_ENABLED=false
-BITRATE=10485760
-RESOLUTION=1280x720
-FRAMERATE=30
-THREADS=4
-ENCODER=nvenc # best, but only for nvidia
-#ENCODER=vp8  # second best
-#ENCODER=h264 # it's ok
+{
+  "settings": {
+    "stream_id": "stream_test",
+    "remote_enabled": false,
+    "direct_connect": true,
+    "bitrate": 10388600,
+    "resolution": "1920x1080",
+    "framerate": 60,
+    "encoder": "nvenc",
+    "threads": 4,
+    "server_url": "http://localhost:4000/api"
+  }
+}
 `;
 
-  writeFileSync(join(finalPath, 'config'), exampleConfig);
+  writeFileSync(join(finalPath, 'config.json'), exampleConfig);
 
   rimraf.sync(TMPpath);
 };
@@ -154,6 +173,15 @@ set GO_ENV=release
 main.exe %1`;
 
   writeFileSync(join(TMPpath, 'start.bat'), startupScript);
+  const sfxScript = `
+;!@Install@!UTF-8!
+GUIMode="2"
+ExecuteFile="start.bat"
+ExecuteParameters="%%S\\config"
+;!@InstallEnd@!`;
+
+  const sfxScriptPath = join(TMPpath, 'sfx.txt');
+  writeFileSync(sfxScriptPath, sfxScript);
 
   spawnSync(
     path7za,
@@ -171,7 +199,7 @@ main.exe %1`;
 
   //Make sfx exe
   await exec(
-    `COPY /b "${sfxFilePath}" + "${sfxConfigPath}" + "${TMParchivePath}" "${finalExecutablePath}"`,
+    `COPY /b "${sfxFilePath}" + "${sfxScriptPath}" + "${TMParchivePath}" "${finalExecutablePath}"`,
     {
       stdio: 'inherit',
     },

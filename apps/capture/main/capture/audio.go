@@ -41,7 +41,6 @@ func NewAudioCapture() *ControlledCapture {
 				continue
 			}
 
-			time.Sleep(time.Second)
 			per_buffer := buffer_len / int64(samples)
 
 			log.Info().
