@@ -26,17 +26,29 @@ var mouse_keys = map[int]string{
 	2: "right",
 }
 
+func clamp(val int, min int, max int) int {
+	if val < min {
+		return min
+	}
+
+	if val > max {
+		return max
+	}
+
+	return val
+}
+
 func SetupRemoteControl(peerConnection *rtc.PeerConnection) {
 
 	config := utils.GetConfig()
 
 	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
-		_, screen_y := robotgo.GetScreenSize()
+		screen_original_x, screen_y := robotgo.GetScreenSize()
 
 		// determine screen_x using the height, because robotgo desn't support multiple monitors properly
 		height_scale := float32(screen_y) / float32(config.ResolutionY)
 
-		screen_x := int(float32(config.ResolutionX) * height_scale)
+		screen_x := clamp(int(float32(config.ResolutionX)*height_scale), 0, screen_original_x)
 
 		d.OnOpen(func() {
 			//Send messages here
@@ -52,8 +64,8 @@ func SetupRemoteControl(peerConnection *rtc.PeerConnection) {
 
 			if command.Type == "move" {
 
-				x := int(command.NormX * float32(screen_x))
-				y := int(command.NormY * float32(screen_y))
+				x := clamp(int(command.NormX*float32(screen_x)), 0, screen_x)
+				y := clamp(int(command.NormY*float32(screen_y)), 0, screen_y)
 
 				//print
 				//fmt.Printf("Received mouse command: %d, %d \n", x, y)
