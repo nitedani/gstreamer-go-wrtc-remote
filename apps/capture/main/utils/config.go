@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/pion/webrtc/v3"
@@ -51,8 +52,8 @@ type Config struct {
 	StreamId        string
 	Bitrate         int
 	Resolution      string
-	ResolutionX     string
-	ResolutionY     string
+	ResolutionX     int
+	ResolutionY     int
 	Framerate       int
 	Threads         int
 	Encoder         string
@@ -88,6 +89,18 @@ func initConfig() {
 	}
 	settings := parsedConfig.Settigs
 	sizes := strings.Split(settings.Resolution, "x")
+	if len(sizes) != 2 {
+		log.Fatal().Msgf("Invalid resolution specified: %s", settings.Resolution)
+	}
+	// parse int
+	resolutionX, err := strconv.Atoi(sizes[0])
+	if err != nil {
+		log.Fatal().Msgf("Invalid resolution specified: %s", settings.Resolution)
+	}
+	resolutionY, err := strconv.Atoi(sizes[1])
+	if err != nil {
+		log.Fatal().Msgf("Invalid resolution specified: %s", settings.Resolution)
+	}
 
 	config = &Config{
 		RemoteEnabled:   settings.RemoteEnabled,
@@ -97,8 +110,8 @@ func initConfig() {
 		StreamId:        settings.StreamId,
 		Bitrate:         settings.Bitrate,
 		Resolution:      settings.Resolution,
-		ResolutionX:     sizes[0],
-		ResolutionY:     sizes[1],
+		ResolutionX:     resolutionX,
+		ResolutionY:     resolutionY,
 		Framerate:       settings.Framerate,
 		Threads:         settings.Threads,
 		Encoder:         settings.Encoder,

@@ -2,6 +2,7 @@ package remote
 
 import (
 	"capture/main/rtc"
+	"capture/main/utils"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -27,8 +28,16 @@ var mouse_keys = map[int]string{
 
 func SetupRemoteControl(peerConnection *rtc.PeerConnection) {
 
+	config := utils.GetConfig()
+
 	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
-		screen_x, screen_y := robotgo.GetScreenSize()
+		_, screen_y := robotgo.GetScreenSize()
+
+		// determine screen_x using the height, because robotgo desn't support multiple monitors properly
+		height_scale := float32(screen_y) / float32(config.ResolutionY)
+
+		screen_x := int(float32(config.ResolutionX) * height_scale)
+
 		d.OnOpen(func() {
 			//Send messages here
 		})

@@ -135,9 +135,10 @@ GUIMode="2"
 {
   "settings": {
     "stream_id": "stream_test",
+    "private": false,
     "remote_enabled": false,
     "direct_connect": true,
-    "bitrate": 10388600,
+    "bitrate": 10485760,
     "resolution": "1920x1080",
     "framerate": 60,
     "encoder": "nvenc",

@@ -45,7 +45,7 @@ func WinVP8Pipeline() string {
 		"target-bitrate=" + strconv.Itoa(bitrate),
 		"!",
 
-		fmt.Sprintf("video/x-vp8,framerate=%d/1,width=%s,height=%s", framerate, width, height),
+		fmt.Sprintf("video/x-vp8,framerate=%d/1,width=%d,height=%d", framerate, width, height),
 		"!",
 
 		"appsink",
@@ -74,7 +74,7 @@ func WinOpenH264Pipeline() string {
 		"d3d11download",
 		"!",
 
-		fmt.Sprintf("video/x-raw,framerate=%d/1,width=%s,height=%s", framerate, width, height),
+		fmt.Sprintf("video/x-raw,framerate=%d/1,width=%d,height=%d", framerate, width, height),
 		"!",
 
 		"queue2",
@@ -123,7 +123,7 @@ func WinNvH264Pipeline() string {
 		"d3d11download",
 		"!",
 
-		fmt.Sprintf("video/x-raw,format=NV12,framerate=%d/1,width=%s,height=%s", framerate, width, height),
+		fmt.Sprintf("video/x-raw,format=NV12,framerate=%d/1,width=%d,height=%d", framerate, width, height),
 		"!",
 
 		"queue2",
