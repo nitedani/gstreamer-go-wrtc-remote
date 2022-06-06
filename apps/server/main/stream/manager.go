@@ -89,6 +89,7 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 						return
 					case <-time.After(time.Second * 6):
 						isAvailable = false
+						delete(streams, streamId)
 					}
 				}()
 				uptime = time.Since(now)
