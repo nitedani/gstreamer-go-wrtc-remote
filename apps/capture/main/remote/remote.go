@@ -38,6 +38,27 @@ func clamp(val int, min int, max int) int {
 	return val
 }
 
+func handleSpecialKey(key string) string {
+	var mapped_key string
+	lower_key := strings.ToLower(key)
+
+	switch lower_key {
+	case "arrowdown":
+		mapped_key = "down"
+	case "arrowup":
+		mapped_key = "up"
+	case "arrowleft":
+		mapped_key = "left"
+	case "arrowright":
+		mapped_key = "right"
+	case "altgraph":
+		mapped_key = "ralt"
+	default:
+		mapped_key = key
+	}
+	return mapped_key
+}
+
 func SetupRemoteControl(peerConnection *rtc.PeerConnection) {
 
 	config := utils.GetConfig()
@@ -68,7 +89,7 @@ func SetupRemoteControl(peerConnection *rtc.PeerConnection) {
 				y := clamp(int(command.NormY*float32(screen_y)), 0, screen_y)
 
 				//print
-				//fmt.Printf("Received mouse command: %d, %d \n", x, y)
+				fmt.Printf("Received mouse command: %d, %d \n", x, y)
 
 				robotgo.Move(int(x), int(y))
 			}
@@ -84,22 +105,20 @@ func SetupRemoteControl(peerConnection *rtc.PeerConnection) {
 				fmt.Printf("Received mouse up command: %s \n", mouse_key)
 				robotgo.Toggle(mouse_key, "up")
 			}
-
 			if command.Type == "keydown" {
-				fmt.Printf("Received keydown: %s \n", command.Key)
-				robotgo.KeyDown(strings.ToLower(command.Key))
+				mapped_key := handleSpecialKey(command.Key)
+				fmt.Printf("Received keydown: %s \n", mapped_key)
+				robotgo.KeyDown(mapped_key)
 			}
-
 			if command.Type == "keyup" {
-				fmt.Printf("Received keyup: %s \n", command.Key)
-				robotgo.KeyUp(strings.ToLower(command.Key))
+				mapped_key := handleSpecialKey(command.Key)
+				fmt.Printf("Received keyup: %s \n", mapped_key)
+				robotgo.KeyUp(mapped_key)
 			}
-
 			if command.Type == "wheel" {
 				fmt.Printf("Received wheel: %f \n", command.Delta)
-				robotgo.Scroll(0, int(command.Delta/5))
+				robotgo.Scroll(0, clamp(-int(command.Delta), -1, 1))
 			}
-
 		})
 	})
 }
