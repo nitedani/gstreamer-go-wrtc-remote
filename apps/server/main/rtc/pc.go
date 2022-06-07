@@ -143,13 +143,18 @@ func (peerConnection *PeerConnection) applyOffer(signal Signal) (*Signal, error)
 
 }
 
+type Packet struct {
+	len int
+	buf []byte
+}
+
 func (peerConnection *PeerConnection) AddRemoteTrack(tr *webrtc.TrackRemote) *webrtc.TrackLocalStaticRTP {
 	outputTrack, err := webrtc.NewTrackLocalStaticRTP(tr.Codec().RTPCodecCapability, tr.ID(), "proxy")
 	if err != nil {
 		panic(err)
 	}
 	go func() {
-		ticker := time.NewTicker(time.Second)
+		ticker := time.NewTicker(time.Second * 3)
 		for range ticker.C {
 			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
 				return
@@ -162,20 +167,45 @@ func (peerConnection *PeerConnection) AddRemoteTrack(tr *webrtc.TrackRemote) *we
 		}
 	}()
 
+	rtp_buffer := make(chan *Packet, 1024)
+
 	go func() {
 		for {
 			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
 				return
 			}
 
-			rtp, _, readErr := tr.ReadRTP()
-			if readErr != nil {
+			b := make([]byte, 1460)
+			i, _, err := tr.Read(b)
+			if err != nil {
 				return
 			}
 
-			if writeErr := outputTrack.WriteRTP(rtp); writeErr != nil {
+			packet := &Packet{
+				len: i,
+				buf: b,
+			}
+			rtp_buffer <- packet
+
+		}
+	}()
+
+	go func() {
+		for {
+			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
 				return
 			}
+
+			packet, ok := <-rtp_buffer
+
+			if !ok {
+				return
+			}
+
+			if _, writeErr := outputTrack.Write(packet.buf[:packet.len]); writeErr != nil {
+				return
+			}
+
 		}
 	}()
 

@@ -94,7 +94,7 @@ func NewVideoCapture() *ControlledCapture {
 		Stop:    stop,
 		GetChannel: func() (chan *gst.Buffer, func()) {
 			counter++
-			channel := make(chan *gst.Buffer)
+			channel := make(chan *gst.Buffer, 2)
 			writing := false
 
 			subscription := e.On("data", func(e *emitter.Event) {

@@ -5,7 +5,10 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-func SetupApi() *webrtc.API {
+var api *webrtc.API
+var settings webrtc.SettingEngine
+
+func SetupApi() {
 	engine := &webrtc.MediaEngine{}
 
 	// Register Interceptors
@@ -35,6 +38,24 @@ func SetupApi() *webrtc.API {
 	err = engine.RegisterCodec(
 		webrtc.RTPCodecParameters{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeVP8,
+				ClockRate:    90000,
+				Channels:     0,
+				SDPFmtpLine:  "",
+				RTCPFeedback: fb,
+			},
+			PayloadType: 96,
+		},
+		webrtc.RTPCodecTypeVideo,
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	err = engine.RegisterCodec(
+		webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:  webrtc.MimeTypeOpus,
 				ClockRate: 48000,
 				Channels:  2, SDPFmtpLine: "useinbandfec=1",
@@ -48,9 +69,12 @@ func SetupApi() *webrtc.API {
 		panic(err)
 	}
 
-	return webrtc.NewAPI(
+	settings = webrtc.SettingEngine{}
+
+	api = webrtc.NewAPI(
 		webrtc.WithMediaEngine(engine),
 		webrtc.WithInterceptorRegistry(i),
+		webrtc.WithSettingEngine(settings),
 	)
 
 }
