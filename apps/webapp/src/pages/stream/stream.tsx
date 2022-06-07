@@ -4,10 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { forceStereoAudio, setOpusAttributes } from './sdp';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import MouseIcon from '@mui/icons-material/Mouse';
+import MouseOutlinedIcon from '@mui/icons-material/MouseOutlined';
 import {
   Backdrop,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   IconButton,
   Slider,
@@ -70,6 +73,15 @@ export const Stream = () => {
       }, 200);
     }
   }, []);
+
+  const handleCursorToggle = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => {
+      if (cursorRef.current) {
+        cursorRef.current.style.display = checked ? 'block' : 'none';
+      }
+    },
+    [],
+  );
 
   // eslint-disable-next-line sonarjs/cognitive-complexity
   useEffect(() => {
@@ -395,6 +407,12 @@ export const Stream = () => {
                 </Stack>
               )}
             </div>
+            <Checkbox
+              defaultChecked={true}
+              onChange={handleCursorToggle}
+              icon={<MouseOutlinedIcon />}
+              checkedIcon={<MouseIcon />}
+            />
           </div>
         )}
       </div>
