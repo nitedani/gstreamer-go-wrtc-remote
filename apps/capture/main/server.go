@@ -4,14 +4,12 @@ import (
 	"capture/main/capture"
 	"capture/main/remote"
 	"capture/main/rtc"
-	"capture/main/utils"
 
 	"github.com/rs/zerolog/log"
 )
 
 func StartWrtcServer() {
 
-	config := utils.GetConfig()
 	signaling := rtc.NewSignaling()
 
 	videoCapture := capture.NewVideoCapture()
@@ -51,9 +49,7 @@ func StartWrtcServer() {
 				log.Info().Str("viewerId", viewerId).Msg("Disconnected")
 			})
 
-			if config.RemoteEnabled {
-				remote.SetupRemoteControl(connection)
-			}
+			remote.SetupRemote(connection)
 
 		}
 

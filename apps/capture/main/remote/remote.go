@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-vgo/robotgo"
+	"github.com/olebedev/emitter"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -59,66 +61,142 @@ func handleSpecialKey(key string) string {
 	return mapped_key
 }
 
-func SetupRemoteControl(peerConnection *rtc.PeerConnection) {
-
+func GetScreenSizes() (int, int) {
 	config := utils.GetConfig()
+	screen_original_x, screen_y := robotgo.GetScreenSize()
 
-	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
-		screen_original_x, screen_y := robotgo.GetScreenSize()
+	// determine screen_x using the height, because robotgo desn't support multiple monitors properly
+	height_scale := float32(screen_y) / float32(config.ResolutionY)
 
-		// determine screen_x using the height, because robotgo desn't support multiple monitors properly
-		height_scale := float32(screen_y) / float32(config.ResolutionY)
+	screen_x := clamp(int(float32(config.ResolutionX)*height_scale), 0, screen_original_x)
 
-		screen_x := clamp(int(float32(config.ResolutionX)*height_scale), 0, screen_original_x)
+	return screen_x, screen_y
+}
 
-		d.OnOpen(func() {
-			//Send messages here
-		})
+func SetupCursorCapture(dc *webrtc.DataChannel) {
 
-		d.OnMessage(func(msg webrtc.DataChannelMessage) {
+	go func() {
+		for {
+			robotgo.AddEvent("mleft")
+			command := Command{
+				Type: "click",
+			}
 
-			var command Command
-			err := json.Unmarshal(msg.Data, &command)
+			data, err := json.Marshal(command)
 			if err != nil {
 				panic(err)
 			}
 
-			if command.Type == "move" {
-
-				x := clamp(int(command.NormX*float32(screen_x)), 0, screen_x)
-				y := clamp(int(command.NormY*float32(screen_y)), 0, screen_y)
-
-				//print
-				fmt.Printf("Received mouse command: %d, %d \n", x, y)
-
-				robotgo.Move(int(x), int(y))
+			//check if the channel is open
+			if dc.ReadyState() != webrtc.DataChannelStateOpen {
+				return
 			}
 
-			if command.Type == "mousedown" {
-				mouse_key := mouse_keys[command.Button]
-				fmt.Printf("Received mouse down command: %s \n", mouse_key)
-				robotgo.Toggle(mouse_key, "down")
+			dc.Send(data)
+		}
+	}()
+
+	// 60 fps ticker
+	ticker := time.NewTicker(time.Second / 60)
+	go func() {
+		for range ticker.C {
+			x, y := robotgo.GetMousePos()
+			screen_x, screen_y := GetScreenSizes()
+			norm_x := float32(x) / float32(screen_x)
+			norm_y := float32(y) / float32(screen_y)
+			command := Command{
+				Type:  "move",
+				NormX: norm_x,
+				NormY: norm_y,
 			}
 
-			if command.Type == "mouseup" {
-				mouse_key := mouse_keys[command.Button]
-				fmt.Printf("Received mouse up command: %s \n", mouse_key)
-				robotgo.Toggle(mouse_key, "up")
+			data, err := json.Marshal(command)
+			if err != nil {
+				panic(err)
 			}
-			if command.Type == "keydown" {
-				mapped_key := handleSpecialKey(command.Key)
-				fmt.Printf("Received keydown: %s \n", mapped_key)
-				robotgo.KeyDown(mapped_key)
+
+			//check if the channel is open
+			if dc.ReadyState() != webrtc.DataChannelStateOpen {
+				return
 			}
-			if command.Type == "keyup" {
-				mapped_key := handleSpecialKey(command.Key)
-				fmt.Printf("Received keyup: %s \n", mapped_key)
-				robotgo.KeyUp(mapped_key)
-			}
-			if command.Type == "wheel" {
-				fmt.Printf("Received wheel: %f \n", command.Delta)
-				robotgo.Scroll(0, clamp(-int(command.Delta), -1, 1))
-			}
+
+			dc.Send(data)
+
+		}
+	}()
+
+}
+
+func ProcessControlCommands(e *emitter.Emitter) {
+	screen_x, screen_y := GetScreenSizes()
+
+	e.On("msg", func(e *emitter.Event) {
+		data := e.Args[0].([]byte)
+
+		var command Command
+		err := json.Unmarshal(data, &command)
+		if err != nil {
+			panic(err)
+		}
+
+		if command.Type == "move" {
+
+			x := clamp(int(command.NormX*float32(screen_x)), 0, screen_x)
+			y := clamp(int(command.NormY*float32(screen_y)), 0, screen_y)
+
+			//print
+			fmt.Printf("Received mouse command: %d, %d \n", x, y)
+
+			//robotgo.Move(int(x), int(y))
+		}
+
+		if command.Type == "mousedown" {
+			mouse_key := mouse_keys[command.Button]
+			fmt.Printf("Received mouse down command: %s \n", mouse_key)
+			//robotgo.Toggle(mouse_key, "down")
+		}
+
+		if command.Type == "mouseup" {
+			mouse_key := mouse_keys[command.Button]
+			fmt.Printf("Received mouse up command: %s \n", mouse_key)
+			robotgo.Toggle(mouse_key, "up")
+		}
+		if command.Type == "keydown" {
+			mapped_key := handleSpecialKey(command.Key)
+			fmt.Printf("Received keydown: %s \n", mapped_key)
+			robotgo.KeyDown(mapped_key)
+		}
+		if command.Type == "keyup" {
+			mapped_key := handleSpecialKey(command.Key)
+			fmt.Printf("Received keyup: %s \n", mapped_key)
+			robotgo.KeyUp(mapped_key)
+		}
+		if command.Type == "wheel" {
+			fmt.Printf("Received wheel: %f \n", command.Delta)
+			robotgo.Scroll(0, clamp(-int(command.Delta), -1, 1))
+		}
+
+	})
+
+}
+
+func SetupRemote(peerConnection *rtc.PeerConnection) {
+	e := &emitter.Emitter{}
+	e.Use("*", emitter.Void)
+	config := utils.GetConfig()
+
+	if config.RemoteEnabled {
+		ProcessControlCommands(e)
+	}
+
+	peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
+		dc.OnOpen(func() {
+			//Send messages here
+			SetupCursorCapture(dc)
+		})
+
+		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+			e.Emit("msg", msg.Data)
 		})
 	})
 }

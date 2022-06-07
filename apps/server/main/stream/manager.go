@@ -89,7 +89,6 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 						return
 					case <-time.After(time.Second * 15):
 						isAvailable = false
-						delete(streams, streamId)
 					}
 				}()
 				uptime = time.Since(now)
@@ -155,8 +154,8 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 						now := time.Now()
 						for {
 
-							//if 20 seconds passed, return empty array
-							if time.Since(now) > 20*time.Second {
+							//if 10 seconds passed, return empty array
+							if time.Since(now) > 10*time.Second {
 								signals_to_send <- make([]rtc.Signal, 0)
 								return
 							}
@@ -179,8 +178,8 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 					go func() {
 						now := time.Now()
 						for {
-							//if 20 seconds passed, return empty array
-							if time.Since(now) > 20*time.Second {
+							//if 10 seconds passed, return empty array
+							if time.Since(now) > 10*time.Second {
 								signals_to_send <- make([]rtc.Signal, 0)
 								return
 							}
@@ -232,6 +231,12 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 				ConnectClient: func() *rtc.PeerConnection {
 					conn := clientConnectionManager.NewConnection(streamId)
 
+					go func() {
+						for range conn.On("almafa") {
+							keepAlive()
+						}
+					}()
+
 					conn.OnDisconnected(func() {
 						log.Error().
 							Str("streamId", streamId).
@@ -257,6 +262,17 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 							Str("streamId", streamId).
 							Msg("failed to create data channel")
 					}
+
+					dc.OnOpen(func() {
+						log.Error().
+							Str("streamId", streamId).
+							Msg("data channel opened")
+					})
+					dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+						log.Error().
+							Str("streamId", streamId).
+							Msg("received data channel message")
+					})
 
 					conn.DataChannel = dc
 

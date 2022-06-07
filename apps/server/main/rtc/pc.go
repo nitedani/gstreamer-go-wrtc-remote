@@ -235,20 +235,23 @@ func (peerConnection *PeerConnection) Initiate() {
 		SDP:      offer.SDP,
 	}
 
-	peerConnection.Emit("signal", signal)
+	go peerConnection.Emit("signal", signal)
 
 }
 
 func connectDatachannel(a *PeerConnection, b *PeerConnection) {
 	if a.DataChannel != nil {
 		a.DataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
+			a.Emit("almafa")
 			if b.DataChannel != nil {
 				b.DataChannel.Send(msg.Data)
 			}
 		})
 	} else {
 		a.OnDataChannel(func(dc *webrtc.DataChannel) {
+			a.DataChannel = dc
 			dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+				a.Emit("almafa")
 				if b.DataChannel != nil {
 					b.DataChannel.Send(msg.Data)
 				}

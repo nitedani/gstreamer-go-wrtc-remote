@@ -51,8 +51,25 @@ export const Stream = () => {
     },
     [],
   );
+  const cursorRef = useRef<HTMLDivElement>(null);
 
-  console.log(volume);
+  const setCursorPosition = useCallback(({ x, y }) => {
+    if (cursorRef.current) {
+      cursorRef.current.style.left = `${x}px`;
+      cursorRef.current.style.top = `${y}px`;
+    }
+  }, []);
+
+  const animateClick = useCallback(() => {
+    if (cursorRef.current) {
+      cursorRef.current.classList.add('scaled');
+      setTimeout(() => {
+        if (cursorRef.current) {
+          cursorRef.current.classList.remove('scaled');
+        }
+      }, 200);
+    }
+  }, []);
 
   // eslint-disable-next-line sonarjs/cognitive-complexity
   useEffect(() => {
@@ -180,6 +197,34 @@ export const Stream = () => {
           videoRef.current!.volume = volume;
         };
 
+        dc.onmessage = (e) => {
+          const data = e.data as ArrayBuffer;
+          const width = videoRef.current!.clientWidth;
+          const height = videoRef.current!.clientHeight;
+
+          const json = JSON.parse(new TextDecoder().decode(data)) as {
+            type: 'move' | 'click';
+            normX: number;
+            normY: number;
+          };
+
+          switch (json.type) {
+            case 'move':
+              {
+                const x = json.normX * width;
+                const y = json.normY * height;
+                setCursorPosition({ x, y });
+              }
+              break;
+            case 'click': {
+              //animateClick();
+            }
+            break;
+            default:
+              break;
+          }
+        };
+
         dc.onopen = () => {
           videoRef.current!.onmousemove = (e) => {
             const width = videoRef.current!.clientWidth;
@@ -229,6 +274,7 @@ export const Stream = () => {
         justifyContent: 'center',
         width: '100vw',
         height: '100vh',
+        position: 'relative',
       }}
     >
       {loading && (
@@ -266,14 +312,33 @@ export const Stream = () => {
         />
       </Backdrop>
       <div className="video-container">
-        <video
-          className="video-height"
-          muted
-          autoPlay
-          playsInline
-          loop
-          ref={videoRef}
-        ></video>
+        <div
+          style={{
+            position: 'relative',
+          }}
+        >
+          <Box
+            ref={cursorRef}
+            id="cursor"
+            sx={{
+              width: 12,
+              height: 12,
+              borderRadius: 20,
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: '#eee',
+              position: 'absolute',
+            }}
+          ></Box>
+          <video
+            className="video-height"
+            muted
+            autoPlay
+            playsInline
+            loop
+            ref={videoRef}
+          ></video>
+        </div>
+
         {!loading && (
           <div className="controls">
             <IconButton

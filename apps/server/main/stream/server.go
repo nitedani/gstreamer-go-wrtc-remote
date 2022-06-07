@@ -100,7 +100,7 @@ func StartSignalingServer(g *echo.Group) {
 
 		stream := streamManager.GetStream(streamId)
 
-		if stream == nil {
+		if stream == nil || !stream.IsAvailable() {
 			return c.String(http.StatusNotFound, "stream not found")
 		}
 

@@ -29,4 +29,12 @@
       width: 160px;
     }
   }
+
+  #cursor {
+    transition: transform 100ms ease-out;
+    transform-origin: center;
+    &.scaled {
+      transform: scale(2) translate(-25%, -25%);
+    }
+  }
 }
