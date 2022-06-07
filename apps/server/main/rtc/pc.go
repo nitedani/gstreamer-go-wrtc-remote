@@ -167,9 +167,34 @@ func (peerConnection *PeerConnection) AddRemoteTrack(tr *webrtc.TrackRemote) *we
 		}
 	}()
 
-	rtp_buffer := make(chan *Packet, 1024)
-
 	go func() {
+		rtp_buffer := make(chan *Packet, 1024)
+
+		defer func() {
+			close(rtp_buffer)
+		}()
+
+		// consumer
+		go func() {
+			for {
+				if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
+					return
+				}
+
+				packet, ok := <-rtp_buffer
+
+				if !ok {
+					return
+				}
+
+				if _, writeErr := outputTrack.Write(packet.buf[:packet.len]); writeErr != nil {
+					return
+				}
+
+			}
+		}()
+
+		// producer
 		for {
 			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
 				return
@@ -188,25 +213,7 @@ func (peerConnection *PeerConnection) AddRemoteTrack(tr *webrtc.TrackRemote) *we
 			rtp_buffer <- packet
 
 		}
-	}()
 
-	go func() {
-		for {
-			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
-				return
-			}
-
-			packet, ok := <-rtp_buffer
-
-			if !ok {
-				return
-			}
-
-			if _, writeErr := outputTrack.Write(packet.buf[:packet.len]); writeErr != nil {
-				return
-			}
-
-		}
 	}()
 
 	return outputTrack
