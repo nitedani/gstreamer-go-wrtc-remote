@@ -216,10 +216,11 @@ export const Stream = () => {
                 setCursorPosition({ x, y });
               }
               break;
-            case 'click': {
-              //animateClick();
-            }
-            break;
+            case 'click':
+              {
+                //animateClick();
+              }
+              break;
             default:
               break;
           }
