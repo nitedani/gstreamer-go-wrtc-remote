@@ -87,7 +87,7 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 					select {
 					case <-keepAliveInterrupt:
 						return
-					case <-time.After(time.Second * 6):
+					case <-time.After(time.Second * 15):
 						isAvailable = false
 						delete(streams, streamId)
 					}

@@ -51,7 +51,8 @@ func (peerConnection *PeerConnection) initializeConnection() {
 	}
 	log.Info().Msgf("Got ice servers: %+v", parsedServers)
 
-	_peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{
+	api := SetupApi()
+	_peerConnection, err := api.NewPeerConnection(webrtc.Configuration{
 		ICEServers: parsedServers,
 	})
 

@@ -57,6 +57,7 @@ func (peerConnection *PeerConnection) initializeConnection() {
 		}
 	}
 	log.Info().Msgf("Ice servers from config: %+v", parsedServers)
+	//api := SetupApi()
 	_peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: parsedServers,
 	})
@@ -148,7 +149,7 @@ func (peerConnection *PeerConnection) AddRemoteTrack(tr *webrtc.TrackRemote) *we
 		panic(err)
 	}
 	go func() {
-		ticker := time.NewTicker(time.Second * 3)
+		ticker := time.NewTicker(time.Second)
 		for range ticker.C {
 			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
 				return
@@ -295,20 +296,6 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 				cb()
 			}()
 		},
-		AddTracks: func(tracks *Tracks) {
-			rtpSender, err := peerConnection.AddTrack(tracks.AudioTrack)
-			if err != nil {
-				panic(err)
-			}
-			processRTCP(rtpSender)
-
-			rtpSender, err = peerConnection.AddTrack(tracks.VideoTrack)
-			if err != nil {
-				panic(err)
-			}
-			processRTCP(rtpSender)
-		},
-
 		ConnectTo: func(other *PeerConnection) {
 
 			connectDatachannel(peerConnection, other)
@@ -324,9 +311,12 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 				peerConnection.OnConnected(func() {
 					time.Sleep(time.Millisecond * 1000)
 					if len(peerConnection.LocalTracks) > 0 {
-
 						for _, track := range peerConnection.LocalTracks {
-							other.AddTrack(track)
+							_, err := other.AddTrack(track)
+							if err != nil {
+								panic(err)
+							}
+							//processRTCP(rtpSender)
 						}
 						time.Sleep(time.Millisecond * 1000)
 						// re-negotiate with the browser
@@ -335,7 +325,11 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 					}
 					peerConnection.On("track", func(e *emitter.Event) {
 						track := e.Args[0].(*webrtc.TrackLocalStaticRTP)
-						other.AddTrack(track)
+						_, err := other.AddTrack(track)
+						if err != nil {
+							panic(err)
+						}
+						//processRTCP(rtpSender)
 						// re-negotiate with the browser
 						other.Initiate()
 

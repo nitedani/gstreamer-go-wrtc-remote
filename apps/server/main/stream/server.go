@@ -22,6 +22,7 @@ type NewStreamBody struct {
 var runId = utils.RandomStr()
 
 func StartSignalingServer(g *echo.Group) {
+
 	config := rtc.GetRtcConfig()
 	iceServers := config.ICEServers
 	directConnect := config.DirectConnect
