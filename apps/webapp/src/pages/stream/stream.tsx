@@ -214,25 +214,25 @@ export const Stream = () => {
           const height = videoRef.current!.clientHeight;
 
           const json = JSON.parse(new TextDecoder().decode(data)) as {
-            type: 'move' | 'mousedown' | 'mouseup';
+            type: 's_move' | 's_mousedown' | 's_mouseup';
             normX: number;
             normY: number;
           };
 
           switch (json.type) {
-            case 'move':
+            case 's_move':
               {
                 const x = json.normX * width;
                 const y = json.normY * height;
                 setCursorPosition({ x, y });
               }
               break;
-            case 'mousedown':
+            case 's_mousedown':
               {
                 animateClick(true);
               }
               break;
-            case 'mouseup':
+            case 's_mouseup':
               {
                 animateClick(false);
               }

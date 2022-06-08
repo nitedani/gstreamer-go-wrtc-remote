@@ -36,14 +36,13 @@ func captureCursor() {
 
 	// 60 fps ticker
 	ticker := time.NewTicker(time.Second / 60)
-
 	for range ticker.C {
 		x, y := robotgo.GetMousePos()
 		screen_x, screen_y := GetScreenSizes()
 		norm_x := float32(x) / float32(screen_x)
 		norm_y := float32(y) / float32(screen_y)
 		command := Command{
-			Type:  "move",
+			Type:  "s_move",
 			NormX: norm_x,
 			NormY: norm_y,
 		}
@@ -63,9 +62,8 @@ func captureClicks() {
 
 	hook.Register(hook.MouseHold, []string{}, func(ev hook.Event) {
 		if ev.Button == hook.MouseMap["left"] {
-
 			command := Command{
-				Type: "mousedown",
+				Type: "s_mousedown",
 			}
 
 			data, err := json.Marshal(command)
@@ -81,7 +79,7 @@ func captureClicks() {
 		if ev.Button == hook.MouseMap["left"] {
 
 			command := Command{
-				Type: "mouseup",
+				Type: "s_mouseup",
 			}
 
 			data, err := json.Marshal(command)
