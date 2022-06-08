@@ -77,6 +77,7 @@ Default capture client config.json:
   "settings": {
     "server_url": "http://localhost:4000/api",
     "stream_id": "stream_test",
+    "private": false,
     "remote_enabled": false,
     "direct_connect": true,
     "bitrate": 10388600,
@@ -91,14 +92,15 @@ Default capture client config.json:
 
 With the configuration above, the stream is available on: http://localhost:4000?streamId=stream_test
 direct_connect set on the client overrides the server setting
+private will hide the stream on the list streams page (/)
 
 ## Development:
 
 Requirements: same as build requirements
 
 1. In VS-code File->Open Workspace from File->select the included workspace file
-2. open signalserver/.env, customize
-3. open streamserver/.env, customize
+2. open server/.env, customize
+3. open capture/config.json, customize
 4. `npm i`
 5. `npm run start:dev`
 
@@ -107,7 +109,7 @@ this command:
 - starts the capture client
 - starts the server, listening on port 4000
 - starts the webpack devserver for the webapp on port 3000, redirects /api calls to localhost:4000(server)
-- opens the browser on `http://localhost:3000/?streamId=default`
+- opens the browser on `http://localhost:3000/stream/stream_test`
 
 The result should be similar:
 ![](/docs/desktop.jpg)
