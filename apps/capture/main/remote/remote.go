@@ -31,8 +31,9 @@ var mouse_keys = map[int]string{
 }
 
 var capturing = false
+var ge = &emitter.Emitter{}
 
-func captureCursor(e *emitter.Emitter) {
+func captureCursor() {
 
 	// 60 fps ticker
 	ticker := time.NewTicker(time.Second / 60)
@@ -52,13 +53,13 @@ func captureCursor(e *emitter.Emitter) {
 			panic(err)
 		}
 
-		e.Emit("output", data)
+		ge.Emit("output", data)
 
 	}
 
 }
 
-func captureClicks(e *emitter.Emitter) {
+func captureClicks() {
 
 	hook.Register(hook.MouseHold, []string{}, func(ev hook.Event) {
 		if ev.Button == hook.MouseMap["left"] {
@@ -71,7 +72,7 @@ func captureClicks(e *emitter.Emitter) {
 				panic(err)
 			}
 
-			e.Emit("output", data)
+			ge.Emit("output", data)
 		}
 	})
 
@@ -87,7 +88,7 @@ func captureClicks(e *emitter.Emitter) {
 				panic(err)
 			}
 
-			e.Emit("output", data)
+			ge.Emit("output", data)
 		}
 	})
 
@@ -121,7 +122,7 @@ func handleSpecialKey(key string) string {
 	case "altgraph":
 		mapped_key = "ralt"
 	default:
-		mapped_key = key
+		mapped_key = lower_key
 	}
 	return mapped_key
 }
@@ -201,8 +202,9 @@ func SetupRemote(peerConnection *rtc.PeerConnection) {
 		dc.OnOpen(func() {
 			if !capturing {
 				capturing = true
-				go captureClicks(e)
-				go captureCursor(e)
+				ge.Use("*", emitter.Void)
+				go captureClicks()
+				go captureCursor()
 
 				go func() {
 					s := hook.Start()
@@ -216,7 +218,7 @@ func SetupRemote(peerConnection *rtc.PeerConnection) {
 			e.Emit("input", msg.Data)
 		})
 
-		e.On("output", func(event *emitter.Event) {
+		ge.On("output", func(event *emitter.Event) {
 
 			data := event.Args[0].([]byte)
 

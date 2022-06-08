@@ -295,57 +295,62 @@ export const Stream = () => {
       }}
     >
       {loading && (
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '300px',
-            height: 'fit-content',
-            background: '#00000099',
-            backdropFilter: 'blur(5px)',
-            color: 'white',
-            padding: '20px',
-            margin: '8px',
-            lineHeight: '1.2em',
-            border: '1px solid gray',
-          }}
-        >
-          {logLines.map((line, index) => (
-            <div key={index}>{line}</div>
-          ))}
-        </Box>
+        <>
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '300px',
+              height: 'fit-content',
+              background: '#00000099',
+              backdropFilter: 'blur(5px)',
+              color: 'white',
+              padding: '20px',
+              margin: '8px',
+              lineHeight: '1.2em',
+              border: '1px solid gray',
+            }}
+          >
+            {logLines.map((line, index) => (
+              <div key={index}>{line}</div>
+            ))}
+          </Box>
+          <Backdrop
+            sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+            open={loading}
+          >
+            <CircularProgress
+              color="inherit"
+              style={{
+                color: blue[500],
+              }}
+            />
+          </Backdrop>
+        </>
       )}
 
-      <Backdrop
-        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
-        open={loading}
-      >
-        <CircularProgress
-          color="inherit"
-          style={{
-            color: blue[500],
-          }}
-        />
-      </Backdrop>
       <div className="video-container">
         <div
           style={{
             position: 'relative',
           }}
         >
-          <Box
-            ref={cursorRef}
-            id="cursor"
-            sx={{
-              width: 12,
-              height: 12,
-              borderRadius: 20,
-              transform: 'translate(-50%, -50%)',
-              backgroundColor: '#eee',
-              position: 'absolute',
-            }}
-          ></Box>
+          {!loading && (
+            <Box
+              ref={cursorRef}
+              id="cursor"
+              sx={{
+                width: 12,
+                height: 12,
+                borderRadius: 20,
+                transform: 'translate(-50%, -50%)',
+                backgroundColor: '#eee',
+                position: 'absolute',
+              }}
+            ></Box>
+          )}
+
           <video
             className="video-height"
             muted
