@@ -49,7 +49,7 @@ func StartWrtcServer() {
 				log.Info().Str("viewerId", viewerId).Msg("Disconnected")
 			})
 
-			remote.SetupRemote(connection)
+			go remote.SetupRemote(connection)
 
 		}
 

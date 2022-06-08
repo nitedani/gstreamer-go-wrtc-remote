@@ -12,6 +12,7 @@ import (
 	"github.com/olebedev/emitter"
 	"github.com/pion/webrtc/v3"
 	hook "github.com/robotn/gohook"
+	"github.com/rs/zerolog/log"
 )
 
 type Command struct {
@@ -139,6 +140,7 @@ func GetScreenSizes() (int, int) {
 }
 
 func ProcessControlCommands() {
+	log.Info().Msg("Starting control commands handler")
 	screen_x, screen_y := GetScreenSizes()
 
 	e.On("input", func(e *emitter.Event) {
@@ -151,7 +153,6 @@ func ProcessControlCommands() {
 		}
 
 		if command.Type == "move" {
-
 			x := clamp(int(command.NormX*float32(screen_x)), 0, screen_x)
 			y := clamp(int(command.NormY*float32(screen_y)), 0, screen_y)
 			// fmt.Printf("Received mouse command: %d, %d \n", x, y)
@@ -200,12 +201,14 @@ func SetupRemote(peerConnection *rtc.PeerConnection) {
 		dc.OnOpen(func() {
 			if !capturing {
 				capturing = true
-				go captureClicks()
+				// go captureClicks()
 				go captureCursor()
-				go func() {
-					s := hook.Start()
-					<-hook.Process(s)
-				}()
+				/*
+					go func() {
+						s := hook.Start()
+						<-hook.Process(s)
+					}()
+				*/
 			}
 		})
 
@@ -214,6 +217,7 @@ func SetupRemote(peerConnection *rtc.PeerConnection) {
 		})
 
 		e.On("output", func(event *emitter.Event) {
+
 			data := event.Args[0].([]byte)
 
 			//check if the channel is open
