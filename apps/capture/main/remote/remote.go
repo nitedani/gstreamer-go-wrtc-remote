@@ -11,6 +11,7 @@ import (
 	"github.com/go-vgo/robotgo"
 	"github.com/olebedev/emitter"
 	"github.com/pion/webrtc/v3"
+	hook "github.com/robotn/gohook"
 )
 
 type Command struct {
@@ -28,44 +29,43 @@ var mouse_keys = map[int]string{
 	2: "right",
 }
 
-var capturingCursor = false
-var capturingClicks = false
+var capturing = false
 var e = &emitter.Emitter{}
 
 func captureCursor() {
 
 	// 60 fps ticker
 	ticker := time.NewTicker(time.Second / 60)
-	go func() {
-		for range ticker.C {
-			x, y := robotgo.GetMousePos()
-			screen_x, screen_y := GetScreenSizes()
-			norm_x := float32(x) / float32(screen_x)
-			norm_y := float32(y) / float32(screen_y)
-			command := Command{
-				Type:  "move",
-				NormX: norm_x,
-				NormY: norm_y,
-			}
 
-			data, err := json.Marshal(command)
-			if err != nil {
-				panic(err)
-			}
-
-			e.Emit("output", data)
-
+	for range ticker.C {
+		x, y := robotgo.GetMousePos()
+		screen_x, screen_y := GetScreenSizes()
+		norm_x := float32(x) / float32(screen_x)
+		norm_y := float32(y) / float32(screen_y)
+		command := Command{
+			Type:  "move",
+			NormX: norm_x,
+			NormY: norm_y,
 		}
-	}()
+
+		data, err := json.Marshal(command)
+		if err != nil {
+			panic(err)
+		}
+
+		e.Emit("output", data)
+
+	}
+
 }
 
 func captureClicks() {
 
-	go func() {
-		for {
-			robotgo.AddEvent("mleft")
+	hook.Register(hook.MouseHold, []string{}, func(ev hook.Event) {
+		if ev.Button == hook.MouseMap["left"] {
+
 			command := Command{
-				Type: "click",
+				Type: "mousedown",
 			}
 
 			data, err := json.Marshal(command)
@@ -75,7 +75,23 @@ func captureClicks() {
 
 			e.Emit("output", data)
 		}
-	}()
+	})
+
+	hook.Register(hook.MouseDown, []string{}, func(ev hook.Event) {
+		if ev.Button == hook.MouseMap["left"] {
+
+			command := Command{
+				Type: "mouseup",
+			}
+
+			data, err := json.Marshal(command)
+			if err != nil {
+				panic(err)
+			}
+
+			e.Emit("output", data)
+		}
+	})
 
 }
 
@@ -184,13 +200,14 @@ func SetupRemote(peerConnection *rtc.PeerConnection) {
 
 	peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
 		dc.OnOpen(func() {
-			if !capturingClicks {
-				captureClicks()
-				capturingClicks = true
-			}
-			if !capturingCursor {
-				captureCursor()
-				capturingCursor = true
+			if !capturing {
+				capturing = true
+				go captureClicks()
+				go captureCursor()
+				go func() {
+					s := hook.Start()
+					<-hook.Process(s)
+				}()
 			}
 		})
 

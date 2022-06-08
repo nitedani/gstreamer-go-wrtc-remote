@@ -63,14 +63,13 @@ export const Stream = () => {
     }
   }, []);
 
-  const animateClick = useCallback(() => {
+  const animateClick = useCallback((pressed: boolean) => {
     if (cursorRef.current) {
-      cursorRef.current.classList.add('scaled');
-      setTimeout(() => {
-        if (cursorRef.current) {
-          cursorRef.current.classList.remove('scaled');
-        }
-      }, 200);
+      if (pressed) {
+        cursorRef.current.classList.add('scaled');
+      } else {
+        cursorRef.current.classList.remove('scaled');
+      }
     }
   }, []);
 
@@ -215,7 +214,7 @@ export const Stream = () => {
           const height = videoRef.current!.clientHeight;
 
           const json = JSON.parse(new TextDecoder().decode(data)) as {
-            type: 'move' | 'click';
+            type: 'move' | 'mousedown' | 'mouseup';
             normX: number;
             normY: number;
           };
@@ -228,9 +227,14 @@ export const Stream = () => {
                 setCursorPosition({ x, y });
               }
               break;
-            case 'click':
+            case 'mousedown':
               {
-                //animateClick();
+                animateClick(true);
+              }
+              break;
+            case 'mouseup':
+              {
+                animateClick(false);
               }
               break;
             default:

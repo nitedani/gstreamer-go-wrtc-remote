@@ -4,7 +4,7 @@
     "private": false,
     "remote_enabled": false,
     "direct_connect": false,
-    "bitrate": 60388600,
+    "bitrate": 6038860,
     "resolution": "1920x1080",
     "framerate": 60,
     "encoder": "nvenc",
