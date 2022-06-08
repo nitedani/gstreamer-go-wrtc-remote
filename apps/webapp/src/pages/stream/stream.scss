@@ -33,6 +33,7 @@
   #cursor {
     transition: transform 100ms ease-out;
     transform-origin: center;
+    pointer-events: none;
     &.scaled {
       transform: scale(2) translate(-25%, -25%);
     }

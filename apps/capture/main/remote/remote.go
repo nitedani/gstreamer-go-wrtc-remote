@@ -31,9 +31,8 @@ var mouse_keys = map[int]string{
 }
 
 var capturing = false
-var e = &emitter.Emitter{}
 
-func captureCursor() {
+func captureCursor(e *emitter.Emitter) {
 
 	// 60 fps ticker
 	ticker := time.NewTicker(time.Second / 60)
@@ -59,7 +58,7 @@ func captureCursor() {
 
 }
 
-func captureClicks() {
+func captureClicks(e *emitter.Emitter) {
 
 	hook.Register(hook.MouseHold, []string{}, func(ev hook.Event) {
 		if ev.Button == hook.MouseMap["left"] {
@@ -139,7 +138,7 @@ func GetScreenSizes() (int, int) {
 	return screen_x, screen_y
 }
 
-func ProcessControlCommands() {
+func ProcessControlCommands(e *emitter.Emitter) {
 	log.Info().Msg("Starting control commands handler")
 	screen_x, screen_y := GetScreenSizes()
 
@@ -190,25 +189,26 @@ func ProcessControlCommands() {
 }
 
 func SetupRemote(peerConnection *rtc.PeerConnection) {
+	e := &emitter.Emitter{}
 	e.Use("*", emitter.Void)
 	config := utils.GetConfig()
 
 	if config.RemoteEnabled {
-		ProcessControlCommands()
+		ProcessControlCommands(e)
 	}
 
 	peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
 		dc.OnOpen(func() {
 			if !capturing {
 				capturing = true
-				// go captureClicks()
-				go captureCursor()
-				/*
-					go func() {
-						s := hook.Start()
-						<-hook.Process(s)
-					}()
-				*/
+				go captureClicks(e)
+				go captureCursor(e)
+
+				go func() {
+					s := hook.Start()
+					<-hook.Process(s)
+				}()
+
 			}
 		})
 
