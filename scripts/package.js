@@ -60,7 +60,8 @@ const buildCaptureWin = async () => {
   });
 */
   await exec(
-    `cd ${streamServerDir}\\main && go build -ldflags=\"-s -w -H windowsgui\" -v -o ${TMPbuildPath}`,
+    /////////////////////////////////////////////////// -H windowsgui /////////////////////
+    `cd ${streamServerDir}\\main && go build -ldflags=\"-s -w\" -v -o ${TMPbuildPath}`,
     {
       stdio: 'inherit',
       env: { ...process.env, ...buildEnv },
@@ -74,7 +75,7 @@ const buildCaptureWin = async () => {
 set PATH=%PATH%;dll
 set GST_PLUGIN_PATH_1_0=plugins
 set GO_ENV=release
-main.exe %1`;
+call main.exe %1`;
 
   writeFileSync(join(TMPpath, 'start.bat'), startupScript);
 
@@ -189,7 +190,7 @@ const buildServerWin = async () => {
   const startupScript = `
 @echo off
 set GO_ENV=release
-main.exe %1`;
+call main.exe %1`;
 
   writeFileSync(join(TMPpath, 'start.bat'), startupScript);
   const sfxScript = `
