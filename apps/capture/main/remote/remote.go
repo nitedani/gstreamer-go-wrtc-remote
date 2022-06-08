@@ -28,6 +28,57 @@ var mouse_keys = map[int]string{
 	2: "right",
 }
 
+var capturingCursor = false
+var capturingClicks = false
+var e = &emitter.Emitter{}
+
+func captureCursor() {
+
+	// 60 fps ticker
+	ticker := time.NewTicker(time.Second / 60)
+	go func() {
+		for range ticker.C {
+			x, y := robotgo.GetMousePos()
+			screen_x, screen_y := GetScreenSizes()
+			norm_x := float32(x) / float32(screen_x)
+			norm_y := float32(y) / float32(screen_y)
+			command := Command{
+				Type:  "move",
+				NormX: norm_x,
+				NormY: norm_y,
+			}
+
+			data, err := json.Marshal(command)
+			if err != nil {
+				panic(err)
+			}
+
+			e.Emit("output", data)
+
+		}
+	}()
+}
+
+func captureClicks() {
+
+	go func() {
+		for {
+			robotgo.AddEvent("mleft")
+			command := Command{
+				Type: "click",
+			}
+
+			data, err := json.Marshal(command)
+			if err != nil {
+				panic(err)
+			}
+
+			e.Emit("output", data)
+		}
+	}()
+
+}
+
 func clamp(val int, min int, max int) int {
 	if val < min {
 		return min
@@ -73,64 +124,10 @@ func GetScreenSizes() (int, int) {
 	return screen_x, screen_y
 }
 
-func SetupCursorCapture(dc *webrtc.DataChannel) {
-
-	go func() {
-		for {
-			robotgo.AddEvent("mleft")
-			command := Command{
-				Type: "click",
-			}
-
-			data, err := json.Marshal(command)
-			if err != nil {
-				panic(err)
-			}
-
-			//check if the channel is open
-			if dc.ReadyState() != webrtc.DataChannelStateOpen {
-				return
-			}
-
-			dc.Send(data)
-		}
-	}()
-
-	// 60 fps ticker
-	ticker := time.NewTicker(time.Second / 60)
-	go func() {
-		for range ticker.C {
-			x, y := robotgo.GetMousePos()
-			screen_x, screen_y := GetScreenSizes()
-			norm_x := float32(x) / float32(screen_x)
-			norm_y := float32(y) / float32(screen_y)
-			command := Command{
-				Type:  "move",
-				NormX: norm_x,
-				NormY: norm_y,
-			}
-
-			data, err := json.Marshal(command)
-			if err != nil {
-				panic(err)
-			}
-
-			//check if the channel is open
-			if dc.ReadyState() != webrtc.DataChannelStateOpen {
-				return
-			}
-
-			dc.Send(data)
-
-		}
-	}()
-
-}
-
-func ProcessControlCommands(e *emitter.Emitter) {
+func ProcessControlCommands() {
 	screen_x, screen_y := GetScreenSizes()
 
-	e.On("msg", func(e *emitter.Event) {
+	e.On("input", func(e *emitter.Event) {
 		data := e.Args[0].([]byte)
 
 		var command Command
@@ -143,17 +140,14 @@ func ProcessControlCommands(e *emitter.Emitter) {
 
 			x := clamp(int(command.NormX*float32(screen_x)), 0, screen_x)
 			y := clamp(int(command.NormY*float32(screen_y)), 0, screen_y)
-
-			//print
-			fmt.Printf("Received mouse command: %d, %d \n", x, y)
-
-			//robotgo.Move(int(x), int(y))
+			// fmt.Printf("Received mouse command: %d, %d \n", x, y)
+			robotgo.Move(int(x), int(y))
 		}
 
 		if command.Type == "mousedown" {
 			mouse_key := mouse_keys[command.Button]
 			fmt.Printf("Received mouse down command: %s \n", mouse_key)
-			//robotgo.Toggle(mouse_key, "down")
+			robotgo.Toggle(mouse_key, "down")
 		}
 
 		if command.Type == "mouseup" {
@@ -181,22 +175,39 @@ func ProcessControlCommands(e *emitter.Emitter) {
 }
 
 func SetupRemote(peerConnection *rtc.PeerConnection) {
-	e := &emitter.Emitter{}
 	e.Use("*", emitter.Void)
 	config := utils.GetConfig()
 
 	if config.RemoteEnabled {
-		ProcessControlCommands(e)
+		ProcessControlCommands()
 	}
 
 	peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
 		dc.OnOpen(func() {
-			//Send messages here
-			SetupCursorCapture(dc)
+			if !capturingClicks {
+				captureClicks()
+				capturingClicks = true
+			}
+			if !capturingCursor {
+				captureCursor()
+				capturingCursor = true
+			}
 		})
 
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-			e.Emit("msg", msg.Data)
+			e.Emit("input", msg.Data)
 		})
+
+		e.On("output", func(event *emitter.Event) {
+			data := event.Args[0].([]byte)
+
+			//check if the channel is open
+			if dc.ReadyState() != webrtc.DataChannelStateOpen {
+				return
+			}
+
+			dc.Send(data)
+		})
+
 	})
 }
