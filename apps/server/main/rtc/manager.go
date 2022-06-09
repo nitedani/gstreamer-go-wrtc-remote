@@ -13,6 +13,7 @@ type ConnectionManager struct {
 	RemoveConnection  func(connectionId string)
 	OnAllDisconnected func(cb func())
 	OnFirstConnection func(cb func())
+	*emitter.Emitter
 }
 
 func NewConnectionManager() *ConnectionManager {
@@ -22,6 +23,7 @@ func NewConnectionManager() *ConnectionManager {
 	numConnections := 0
 
 	manager := &ConnectionManager{
+		Emitter:     e,
 		connections: connections,
 		GetConnections: func() map[string]*PeerConnection {
 			return connections
@@ -36,11 +38,13 @@ func NewConnectionManager() *ConnectionManager {
 
 			connection.OnConnected(func() {
 				numConnections++
-				if numConnections == 1 {
-					go func() {
-						e.Emit("firstconnection")
-					}()
-				}
+				/*
+					if numConnections == 1 {
+						go func() {
+							e.Emit("firstconnection")
+						}()
+					}
+				*/
 			})
 
 			connection.OnDisconnected(func() {
@@ -51,6 +55,7 @@ func NewConnectionManager() *ConnectionManager {
 						e.Emit("alldisconnected")
 					}()
 				}
+				// e.Off("*")
 			})
 
 			connection.OnDataChannel(func(dc *webrtc.DataChannel) {

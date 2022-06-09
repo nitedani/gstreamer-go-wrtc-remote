@@ -21,6 +21,7 @@ type ListStreamsResponseEntry struct {
 type Stream struct {
 	Id                         string
 	Connection                 *rtc.PeerConnection
+	ViewerManager              *rtc.ConnectionManager
 	SetSnapshot                func(snapshot *bytes.Buffer)
 	GetSnapshot                func() *bytes.Buffer
 	SignalToCaptureClient      func(signal rtc.Signal) error
@@ -95,9 +96,17 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 				isAvailable = true
 			}
 
-			viewer_manager := rtc.NewConnectionManager()
-			viewer_manager.OnAllDisconnected(func() {
+			var viewer_manager *rtc.ConnectionManager
 
+			// fix leaky subscription
+			existing_stream := streams[streamId]
+			if existing_stream != nil {
+				viewer_manager = existing_stream.ViewerManager
+			} else {
+				viewer_manager = rtc.NewConnectionManager()
+			}
+
+			viewer_manager.OnAllDisconnected(func() {
 				// when all viewers disconnected from this stream,
 				// disconnect the server(this code) from the capture client
 				clientConnectionManager.RemoveConnection(streamId)
@@ -111,8 +120,9 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 
 			snapshot := bytes.NewBuffer(nil)
 			stream = &Stream{
-				Id:         streamId,
-				Connection: nil,
+				ViewerManager: viewer_manager,
+				Id:            streamId,
+				Connection:    nil,
 				GetUptime: func() time.Duration {
 					return uptime
 				},
@@ -160,11 +170,13 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 								return
 							}
 
-							if len(to_client_signal_buffers[streamId]) > 0 {
-								signals_to_send <- (to_client_signal_buffers[streamId])
+							if to_client_signal_buffers[streamId] != nil {
+								if len(to_client_signal_buffers[streamId]) > 0 {
+									signals_to_send <- (to_client_signal_buffers[streamId])
 
-								to_client_signal_buffers[streamId] = make([]rtc.Signal, 0)
-								return
+									to_client_signal_buffers[streamId] = make([]rtc.Signal, 0)
+									return
+								}
 							}
 
 							time.Sleep(time.Second * 1)
@@ -229,13 +241,11 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 					return len(viewer_manager.GetConnections())
 				},
 				ConnectClient: func() *rtc.PeerConnection {
-					conn := clientConnectionManager.NewConnection(streamId)
+					conn := clientConnectionManager.GetConnection(streamId)
 
-					go func() {
-						for range conn.On("almafa") {
-							keepAlive()
-						}
-					}()
+					if conn == nil {
+						conn = clientConnectionManager.NewConnection(streamId)
+					}
 
 					conn.OnDisconnected(func() {
 						log.Error().
@@ -247,6 +257,11 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 					})
 
 					conn.OnSignal(func(signal rtc.Signal) {
+						log.Error().
+							Str("viewerId", signal.ViewerId).
+							Str("type", signal.Type).
+							Msg("received signal YES")
+
 						// forward the signal to the capture client
 						to_client_signal_buffers[streamId] = append(
 							to_client_signal_buffers[streamId],

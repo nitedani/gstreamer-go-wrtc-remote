@@ -84,7 +84,7 @@ func PollSignals() chan Signal {
 				log.Printf("Received signal from %s", signal.ViewerId)
 				signalsChan <- signal
 			}
-			time.Sleep(time.Second * 1)
+			// time.Sleep(time.Second * 1)
 		}
 	}()
 

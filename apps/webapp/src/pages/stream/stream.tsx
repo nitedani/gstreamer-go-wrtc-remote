@@ -21,7 +21,8 @@ import VolumeDown from '@mui/icons-material/VolumeDown';
 import VolumeUp from '@mui/icons-material/VolumeUp';
 import { useParams } from 'react-router-dom';
 import { useStore } from 'src/store/store';
-
+import { shortcut } from 'src/utils/shortcut';
+import { names } from 'src/utils/keys';
 const sdpTransform = (sdp: string) => {
   let sdp2 = sdp
     .replace(/(m=video.*\r\n)/g, `$1b=AS:${15 * 1024}\r\n`)
@@ -267,11 +268,25 @@ export const Stream = () => {
           };
 
           document.addEventListener('keydown', (e) => {
-            dc.send(JSON.stringify({ type: 'keydown', key: e.key }));
+            let key = e.key;
+            if (e.keyCode in names) {
+              key = names[e.keyCode];
+            }
+            console.log(e, key);
+            e.stopPropagation();
+            e.preventDefault();
+            dc.send(JSON.stringify({ type: 'keydown', key }));
           });
 
           document.addEventListener('keyup', (e) => {
-            dc.send(JSON.stringify({ type: 'keyup', key: e.key }));
+            let key = e.key;
+            if (e.keyCode in names) {
+              key = names[e.keyCode];
+            }
+            console.log(e, key);
+            e.stopPropagation();
+            e.preventDefault();
+            dc.send(JSON.stringify({ type: 'keyup', key }));
           });
         };
       });

@@ -320,7 +320,15 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 		OnSignal: func(cb func(signal Signal)) {
 			go func() {
 				for event := range e.On("signal") {
-					go cb(event.Args[0].(Signal))
+					go func(event emitter.Event) {
+						defer func() {
+							if r := recover(); r != nil {
+								log.Error().Msg("panic in OnSignal")
+							}
+						}()
+						cb(event.Args[0].(Signal))
+					}(event)
+
 				}
 			}()
 		},
