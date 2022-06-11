@@ -69,36 +69,30 @@ func StartSignalingServer(g *echo.Group, ss *socketio.Server) {
 		return c.JSON(http.StatusOK, iceServers)
 	})
 
-	// Viewer route
-	g.POST("/connect", func(c echo.Context) error {
-		viewerId := utils.RandomStr()
-		log.Info().
-			Str("viewerId", viewerId).
-			Msg("client called /connect")
-
-		c.SetCookie(&http.Cookie{
-			Name:  "connection_id",
-			Value: viewerId,
-		})
-		return c.String(http.StatusOK, viewerId)
-	})
-
 	ss.OnConnect("/", func(s socketio.Conn) error {
+
+		log.Info().
+			Str("method", "OnConnect").
+			Str("connectionId", s.ID()).
+			Msg("Socket connected")
 
 		url := s.URL()
 		key := url.Query().Get("streamKey")
 		streamId := url.Query().Get("streamId")
 		streamId = streamId + runId
 
-		log.Error().
+		log.Info().
 			Str("url", url.String()).
 			Str("streamId", streamId).
 			Str("streamKey", key).
-			Msg("viewer connected")
+			Msg("Socket args")
 
 		stream := streamManager.GetStream(streamId)
 
 		if stream == nil {
+			log.Error().
+				Str("streamId", streamId).
+				Msg("stream not found")
 			s.Close()
 			return nil
 		}
@@ -120,11 +114,13 @@ func StartSignalingServer(g *echo.Group, ss *socketio.Server) {
 			go s.Emit("conn_ev", event)
 		})
 
+		s.Join(streamId + "subscribers")
+
 		if key == "" {
 			viewerId := utils.RandomStr()
 			s.SetContext(&ViewerSocketContext{StreamId: streamId, ViewerId: viewerId})
 			s.Join(viewerId)
-			s.Join(streamId + "_viewers")
+
 			fmt.Println("viewer connected:", viewerId)
 
 		} else {
@@ -299,7 +295,7 @@ func StartSignalingServer(g *echo.Group, ss *socketio.Server) {
 		if directConnect || stream.IsDirectConnect {
 			for _, signal := range signals.Value {
 				viewerId := signal.ViewerId
-				ss.BroadcastToRoom("/", viewerId, "signal", signal)
+				go ss.BroadcastToRoom("/", viewerId, "signal", signal)
 			}
 		} else {
 			cc := stream.Connection

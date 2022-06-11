@@ -198,7 +198,7 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 				OnViewerConnected: func(cb func(connection string)) {
 					if isDirectConnect {
 						e.On("p2p_viewer_connected", func(ev *emitter.Event) {
-							cb(ev.Args[0].(string))
+							go cb(ev.Args[0].(string))
 						})
 					} else {
 						viewer_manager.OnConnection(cb)
@@ -207,14 +207,14 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 				OnViewerDisconnected: func(cb func(connectionId string)) {
 					if isDirectConnect {
 						e.On("p2p_viewer_disconnected", func(ev *emitter.Event) {
-							cb(ev.Args[0].(string))
+							go cb(ev.Args[0].(string))
 						})
 					} else {
 						viewer_manager.OnDisconnected(cb)
 					}
 				},
 				OnClientConnectionEvent: func(event ConnectionEvent) {
-					if !isDirectConnect || event.ViewerId == stream.Id {
+					if !isDirectConnect {
 						return
 					}
 					p2pConnectionCount = event.ViewerCount
@@ -232,13 +232,20 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 						conn = clientConnectionManager.NewConnection(streamId)
 					}
 
-					conn.OnDisconnected(func() {
-						log.Error().
-							Str("streamId", streamId).
-							Msg("client disconnected")
-						// connection to the capture client, set to nil, so that it can be recreated
-						stream.Connection = nil
-					})
+					go func() {
+						// 30 fps ticker
+						ticker := time.NewTicker(time.Second / 30)
+						for range ticker.C {
+							if conn.ConnectionState() == webrtc.PeerConnectionStateClosed {
+								log.Error().
+									Str("streamId", streamId).
+									Msg("client disconnected")
+								// connection to the capture client, set to nil, so that it can be recreated
+								stream.Connection = nil
+								return
+							}
+						}
+					}()
 
 					conn.OnSignal(func(signal rtc.Signal) {
 

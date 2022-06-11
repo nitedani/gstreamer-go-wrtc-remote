@@ -86,7 +86,7 @@ func (peerConnection *PeerConnection) initializeConnection() {
 			Type:      "candidate",
 			Candidate: json,
 		}
-		peerConnection.Emit("signal", signal)
+		peerConnection.EmitterVoid.Emit("signal", signal)
 	})
 
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -235,26 +235,35 @@ func (peerConnection *PeerConnection) Initiate() {
 		SDP:      offer.SDP,
 	}
 
-	go peerConnection.Emit("signal", signal)
+	go peerConnection.EmitterVoid.Emit("signal", signal)
 
 }
 
 func connectDatachannel(a *PeerConnection, b *PeerConnection) {
+
+	a.EmitterVoid.On("datach-message", func(e *emitter.Event) {
+		data := e.Args[0].([]byte)
+		if b.DataChannel != nil {
+			b.DataChannel.Send(data)
+		}
+	})
+
 	if a.DataChannel != nil {
 		a.DataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-			a.Emit("almafa")
-			if b.DataChannel != nil {
-				b.DataChannel.Send(msg.Data)
-			}
+			a.EmitterVoid.Emit("datach-message", msg.Data)
 		})
+		a.DataChannel.OnClose(func() {
+			a.EmitterVoid.Off("datach-message")
+		})
+
 	} else {
 		a.OnDataChannel(func(dc *webrtc.DataChannel) {
 			a.DataChannel = dc
 			dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-				a.Emit("almafa")
-				if b.DataChannel != nil {
-					b.DataChannel.Send(msg.Data)
-				}
+				a.EmitterVoid.Emit("datach-message", msg.Data)
+			})
+			dc.OnClose(func() {
+				a.EmitterVoid.Off("datach-message")
 			})
 		})
 	}
@@ -286,7 +295,7 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 					return err
 				}
 				go func() {
-					e.Emit("signal", *answerSignal)
+					eVoid.Emit("signal", *answerSignal)
 				}()
 			case "answer":
 				initialized = true
@@ -302,7 +311,7 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 						Candidate: json,
 					}
 					go func() {
-						e.Emit("signal", signal)
+						eVoid.Emit("signal", signal)
 					}()
 				}
 			case "candidate":
@@ -321,30 +330,19 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 			return nil
 		},
 		OnSignal: func(cb func(signal Signal)) {
-			go func() {
-				for event := range e.On("signal") {
-					go func(event emitter.Event) {
-						defer func() {
-							if r := recover(); r != nil {
-								log.Error().Msg("panic in OnSignal")
-							}
-						}()
-						cb(event.Args[0].(Signal))
-					}(event)
-
-				}
-			}()
+			eVoid.On("signal", func(ev *emitter.Event) {
+				go cb(ev.Args[0].(Signal))
+			})
 		},
 		OnDisconnected: func(cb func()) {
 			eVoid.On("disconnected", func(e *emitter.Event) {
-				cb()
+				go cb()
 			})
 		},
 		OnConnected: func(cb func()) {
 			eVoid.On("connected", func(e *emitter.Event) {
-				cb()
+				go cb()
 			})
-
 		},
 		ConnectTo: func(other *PeerConnection) {
 

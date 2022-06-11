@@ -23,6 +23,7 @@ func NewConnectionManager() *ConnectionManager {
 	//A map to store connections by their ID
 	var connections = make(map[string]*PeerConnection)
 	e := &emitter.Emitter{}
+	e.Use("*", emitter.Void)
 	numConnections := 0
 
 	manager := &ConnectionManager{
@@ -42,32 +43,18 @@ func NewConnectionManager() *ConnectionManager {
 
 			connection.OnConnected(func() {
 				numConnections++
-
-				go func() {
-					e.Emit("connection", connection.Id)
-				}()
-
-				/*
-					if numConnections == 1 {
-						go func() {
-							e.Emit("firstconnection")
-						}()
-					}
-				*/
+				e.Emit("connection", connection.Id)
+				if numConnections == 1 {
+					e.Emit("firstconnection")
+				}
 			})
 
 			connection.OnDisconnected(func() {
 				numConnections--
 				delete(connections, connection.Id)
-
-				go func() {
-					e.Emit("disconnected", connection.Id)
-				}()
-
+				e.Emit("disconnected", connection.Id)
 				if numConnections == 0 {
-					go func() {
-						e.Emit("alldisconnected")
-					}()
+					e.Emit("alldisconnected")
 				}
 				// e.Off("*")
 			})
@@ -89,32 +76,24 @@ func NewConnectionManager() *ConnectionManager {
 			}
 		},
 		OnAllDisconnected: func(cb func()) {
-			go func() {
-				for range e.On("alldisconnected") {
-					go cb()
-				}
-			}()
+			e.On("alldisconnected", func(e *emitter.Event) {
+				go cb()
+			})
 		},
 		OnFirstConnection: func(cb func()) {
-			go func() {
-				for range e.On("firstconnection") {
-					go cb()
-				}
-			}()
+			e.On("firstconnection", func(e *emitter.Event) {
+				go cb()
+			})
 		},
 		OnConnection: func(cb func(connectionId string)) {
-			go func() {
-				for ev := range e.On("connection") {
-					cb(ev.Args[0].(string))
-				}
-			}()
+			e.On("connection", func(ev *emitter.Event) {
+				go cb(ev.Args[0].(string))
+			})
 		},
 		OnDisconnected: func(cb func(connectionId string)) {
-			go func() {
-				for ev := range e.On("disconnected") {
-					cb(ev.Args[0].(string))
-				}
-			}()
+			e.On("disconnected", func(ev *emitter.Event) {
+				go cb(ev.Args[0].(string))
+			})
 		},
 	}
 	/*
