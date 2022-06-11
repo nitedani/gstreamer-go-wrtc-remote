@@ -23,6 +23,7 @@ import { useParams } from 'react-router-dom';
 import { useStore } from 'src/store/store';
 import { shortcut } from 'src/utils/shortcut';
 import { names } from 'src/utils/keys';
+import { parseEvent } from 'src/utils/parse';
 const sdpTransform = (sdp: string) => {
   let sdp2 = sdp
     .replace(/(m=video.*\r\n)/g, `$1b=AS:${15 * 1024}\r\n`)
@@ -209,16 +210,17 @@ export const Stream = () => {
           videoRef.current!.volume = volume;
         };
 
-        dc.onmessage = (e) => {
-          const data = e.data as ArrayBuffer;
-          const width = videoRef.current!.clientWidth;
-          const height = videoRef.current!.clientHeight;
-
-          const json = JSON.parse(new TextDecoder().decode(data)) as {
+        dc.onmessage = async (e) => {
+          const json = await parseEvent<{
             type: 's_move' | 's_mousedown' | 's_mouseup';
             normX: number;
             normY: number;
-          };
+          }>(e);
+
+          // view
+
+          const width = videoRef.current!.clientWidth;
+          const height = videoRef.current!.clientHeight;
 
           switch (json.type) {
             case 's_move':
@@ -245,14 +247,35 @@ export const Stream = () => {
 
         dc.onopen = () => {
           videoRef.current!.onmousemove = (e) => {
-            const width = videoRef.current!.clientWidth;
-            const height = videoRef.current!.clientHeight;
-
-            //normalize mouse position
-            const normX = e.offsetX / width;
-            const normY = e.offsetY / height;
-
-            dc.send(JSON.stringify({ type: 'move', normX, normY }));
+            console.log(
+              (document as any).pointerLockElement === videoRef.current ||
+                (document as any).mozPointerLockElement === videoRef.current,
+            );
+            if (
+              (document as any).pointerLockElement === videoRef.current ||
+              (document as any).mozPointerLockElement === videoRef.current
+            ) {
+              dc.send(
+                JSON.stringify({
+                  type: 'move_raw',
+                  movementX: e.movementX,
+                  movementY: e.movementY,
+                }),
+              );
+            } else {
+              const width = videoRef.current!.clientWidth;
+              const height = videoRef.current!.clientHeight;
+              //normalize mouse position
+              const normX = e.offsetX / width;
+              const normY = e.offsetY / height;
+              dc.send(
+                JSON.stringify({
+                  type: 'move',
+                  normX,
+                  normY,
+                }),
+              );
+            }
           };
 
           videoRef.current!.addEventListener('mousedown', (e) => {
@@ -267,15 +290,19 @@ export const Stream = () => {
             dc.send(JSON.stringify({ type: 'wheel', delta: e.deltaY }));
           };
 
+          videoRef.current!.onclick = () => {
+            videoRef.current!.requestPointerLock();
+          };
+
           document.addEventListener('keydown', (e) => {
             let key = e.key;
             if (e.keyCode in names) {
               key = names[e.keyCode];
             }
-            console.log(e, key);
+            console.log('keydown', e);
             e.stopPropagation();
             e.preventDefault();
-            dc.send(JSON.stringify({ type: 'keydown', key }));
+            dc.send(JSON.stringify({ type: 'keydown', key: e.key }));
           });
 
           document.addEventListener('keyup', (e) => {
@@ -283,10 +310,10 @@ export const Stream = () => {
             if (e.keyCode in names) {
               key = names[e.keyCode];
             }
-            console.log(e, key);
+            console.log('keyup', e);
             e.stopPropagation();
             e.preventDefault();
-            dc.send(JSON.stringify({ type: 'keyup', key }));
+            dc.send(JSON.stringify({ type: 'keyup', key: e.key }));
           });
         };
       });
@@ -345,10 +372,18 @@ export const Stream = () => {
         </>
       )}
 
-      <div className="video-container">
+      <Box
+        className="video-container"
+        sx={{
+          border: 0,
+          maxWidth: '100vw',
+          maxHeight: '100vh',
+        }}
+      >
         <div
           style={{
             position: 'relative',
+            display: 'flex',
           }}
         >
           {!loading && (
@@ -377,7 +412,13 @@ export const Stream = () => {
         </div>
 
         {!loading && (
-          <div className="controls">
+          <Box
+            className="controls"
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
             <IconButton
               style={{ color: grey[500] }}
               aria-label="full-screen"
@@ -403,7 +444,18 @@ export const Stream = () => {
             >
               <FullscreenIcon />
             </IconButton>
-            <div className="volume-container">
+            <Checkbox
+              defaultChecked={true}
+              onChange={handleCursorToggle}
+              icon={<MouseOutlinedIcon />}
+              checkedIcon={<MouseIcon />}
+            />
+            <Box
+              className="volume-container"
+              sx={{
+                width: 'fit-content',
+              }}
+            >
               {videoRef.current!.muted && volume !== 0 ? (
                 <Button
                   onClick={() => {
@@ -417,7 +469,7 @@ export const Stream = () => {
                 <Stack
                   spacing={2}
                   direction="row"
-                  sx={{ mb: 1 }}
+                  sx={{ width: 160, px: '8px' }}
                   alignItems="center"
                 >
                   <VolumeDown fontSize="small" />
@@ -430,16 +482,10 @@ export const Stream = () => {
                   <VolumeUp fontSize="small" />
                 </Stack>
               )}
-            </div>
-            <Checkbox
-              defaultChecked={true}
-              onChange={handleCursorToggle}
-              icon={<MouseOutlinedIcon />}
-              checkedIcon={<MouseIcon />}
-            />
-          </div>
+            </Box>
+          </Box>
         )}
-      </div>
+      </Box>
     </Box>
   );
 };

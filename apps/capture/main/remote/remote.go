@@ -16,12 +16,14 @@ import (
 )
 
 type Command struct {
-	Type   string  `json:"type"`
-	NormX  float32 `json:"normX"`
-	NormY  float32 `json:"normY"`
-	Button int     `json:"button"`
-	Key    string  `json:"key"`
-	Delta  float32 `json:"delta"`
+	Type      string  `json:"type"`
+	NormX     float32 `json:"normX"`
+	NormY     float32 `json:"normY"`
+	Button    int     `json:"button"`
+	Key       string  `json:"key"`
+	Delta     float32 `json:"delta"`
+	MovementX int     `json:"movementX"`
+	MovementY int     `json:"movementY"`
 }
 
 var mouse_keys = map[int]string{
@@ -155,8 +157,15 @@ func ProcessControlCommands(e *emitter.Emitter) {
 		if command.Type == "move" {
 			x := clamp(int(command.NormX*float32(screen_x)), 0, screen_x)
 			y := clamp(int(command.NormY*float32(screen_y)), 0, screen_y)
-			// fmt.Printf("Received mouse command: %d, %d \n", x, y)
+			fmt.Printf("Received mouse absolute command: %d, %d \n", x, y)
 			robotgo.Move(int(x), int(y))
+		}
+
+		if command.Type == "move_raw" {
+			movement_X := int(command.MovementX)
+			movement_Y := int(command.MovementY)
+			fmt.Printf("Received mouse relative command: %d, %d \n", movement_X, movement_Y)
+			robotgo.MoveRelative(movement_X, movement_Y)
 		}
 
 		if command.Type == "mousedown" {
@@ -171,9 +180,17 @@ func ProcessControlCommands(e *emitter.Emitter) {
 			robotgo.Toggle(mouse_key, "up")
 		}
 		if command.Type == "keydown" {
-			mapped_key := handleSpecialKey(command.Key)
-			fmt.Printf("Received keydown: %s \n", mapped_key)
-			robotgo.KeyDown(mapped_key)
+			fmt.Printf("Received keydown: %s \n", command.Key)
+			//match, _ := regexp.MatchString("[áéíóöőúüűÁÉÍÓÖŐÚÜŰ:?\"+!%/=()>*[]{}]", command.Key)
+			//log.Error().Msgf("match: %d", match)
+			//fmt.Println(match)
+			length := len([]rune(command.Key))
+			if length == 1 {
+				robotgo.TypeStr(command.Key)
+			} else {
+				mapped_key := handleSpecialKey(command.Key)
+				robotgo.KeyDown(mapped_key)
+			}
 		}
 		if command.Type == "keyup" {
 			mapped_key := handleSpecialKey(command.Key)
