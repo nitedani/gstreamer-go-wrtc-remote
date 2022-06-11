@@ -50,9 +50,9 @@ export const Home = () => {
               cursor: 'pointer',
               border: '1px solid transparent',
               transition: 'all 0.15s ease-in-out',
+              borderRadius: '5px',
               '&:hover': {
                 border: '1px solid #ffab95',
-                borderRadius: '5px',
               },
             }}
             onClick={() => {

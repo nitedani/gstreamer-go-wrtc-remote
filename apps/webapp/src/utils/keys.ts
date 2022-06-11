@@ -39,7 +39,7 @@ export const keys = {
   x: 88,
   y: 89,
   z: 90,
-/*
+  /*
   // Punctuations keys in US layout
   ';': 186,
   '=': 187,
