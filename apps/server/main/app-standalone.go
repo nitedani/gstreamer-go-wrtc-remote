@@ -7,6 +7,7 @@ import (
 	"os"
 	"signaling/main/stream"
 
+	socketio "github.com/googollee/go-socket.io"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -34,9 +35,19 @@ func main() {
 
 	}
 	e := createMux()
+
 	g := e.Group("/api")
 
-	stream.StartSignalingServer(g)
+	server := socketio.NewServer(nil)
+	go server.Serve()
+	defer server.Close()
+
+	stream.StartSignalingServer(g, server)
+
+	e.Any("/api/socket/", func(context echo.Context) error {
+		server.ServeHTTP(context.Response(), context.Request())
+		return nil
+	})
 
 	if os.Getenv("GO_ENV") == "release" {
 		port := os.Getenv("PORT")

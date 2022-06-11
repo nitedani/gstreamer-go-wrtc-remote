@@ -56,6 +56,7 @@
     "rimraf": "^3.0.2",
     "rxjs": "^7.5.2",
     "simple-peer": "^9.11.1",
+    "socket.io-client": "^1.4.8",
     "zustand": "^4.0.0-rc.0"
   },
   "devDependencies": {
@@ -81,6 +82,7 @@
     "@types/react-router-dom": "^5.3.3",
     "@types/simple-peer": "^9.11.4",
     "@types/socket.io": "^3.0.2",
+    "@types/socket.io-client": "^1.4.36",
     "@types/supertest": "^2.0.11",
     "@types/webpack-env": "^1.16.3",
     "@typescript-eslint/eslint-plugin": "^5.10.1",

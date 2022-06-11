@@ -37,6 +37,8 @@ type PeerConnection struct {
 	DataChannel       *webrtc.DataChannel
 	*webrtc.PeerConnection
 	*emitter.Emitter
+
+	EmitterVoid *emitter.Emitter
 }
 type ICEServer struct {
 	URLs           []string    `json:"urls"`
@@ -96,14 +98,12 @@ func (peerConnection *PeerConnection) initializeConnection() {
 
 	peerConnection.OnConnectionStateChange(func(connectionState webrtc.PeerConnectionState) {
 		if connectionState == webrtc.PeerConnectionStateDisconnected {
-			go func() {
-				peerConnection.Emit("disconnected")
-			}()
+			peerConnection.EmitterVoid.Emit("disconnected")
+
 			peerConnection.Close()
 		} else if connectionState == webrtc.PeerConnectionStateConnected {
-			go func() {
-				peerConnection.Emit("connected")
-			}()
+			peerConnection.EmitterVoid.Emit("connected")
+
 		}
 	})
 
@@ -262,13 +262,16 @@ func connectDatachannel(a *PeerConnection, b *PeerConnection) {
 
 func newConnection(Id string) (peerConnection *PeerConnection) {
 	e := &emitter.Emitter{}
-	//e.Use("*", emitter.Void)
+	eVoid := &emitter.Emitter{}
+
+	eVoid.Use("*", emitter.Void)
 	localTracks := make([]*webrtc.TrackLocalStaticRTP, 0)
 	pendingCandidates := make([]*webrtc.ICECandidate, 0)
 	var snapshot *bytes.Buffer = nil
 
 	initialized := false
 	peerConnection = &PeerConnection{
+		EmitterVoid:       eVoid,
 		PendingCandidates: pendingCandidates,
 		LocalTracks:       localTracks,
 		Emitter:           e,
@@ -333,16 +336,15 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 			}()
 		},
 		OnDisconnected: func(cb func()) {
-			go func() {
-				<-e.On("disconnected")
+			eVoid.On("disconnected", func(e *emitter.Event) {
 				cb()
-			}()
+			})
 		},
 		OnConnected: func(cb func()) {
-			go func() {
-				<-e.On("connected")
+			eVoid.On("connected", func(e *emitter.Event) {
 				cb()
-			}()
+			})
+
 		},
 		ConnectTo: func(other *PeerConnection) {
 

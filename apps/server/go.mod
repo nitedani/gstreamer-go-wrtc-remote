@@ -9,7 +9,11 @@ require (
 )
 
 require (
+	github.com/gofrs/uuid v4.0.0+incompatible // indirect
+	github.com/gomodule/redigo v1.8.4 // indirect
 	github.com/google/uuid v1.3.0 // indirect
+	github.com/googollee/go-socket.io v1.6.2 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/olebedev/emitter v0.0.0-20190110104742-e8d1457e6aee // indirect
 	github.com/pion/datachannel v1.5.2 // indirect
 	github.com/pion/dtls/v2 v2.1.3 // indirect

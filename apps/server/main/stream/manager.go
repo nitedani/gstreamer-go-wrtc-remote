@@ -30,30 +30,30 @@ type Stream struct {
 	NewViewer                  func(viewerId string) *rtc.PeerConnection
 	GetViewer                  func(viewerId string) *rtc.PeerConnection
 	GetViewerCount             func() int
+	OnClientConnectionEvent    func(event ConnectionEvent)
 	GetViewers                 func() map[string]*rtc.PeerConnection
 	GetSignalsForCaptureClient func() chan []rtc.Signal
-	GetSignalsForViewer        func(viewerId string) chan []rtc.Signal
 	IsAvailable                func() bool
 	IsDirectConnect            bool
 	IsPrivate                  bool
 	GetUptime                  func() time.Duration
+	OnViewerConnected          func(cb func(connectionId string))
+	OnViewerDisconnected       func(cb func(connectionId string))
 }
 
 type StreamManager struct {
-	streams     map[string]*Stream
-	GetStreams  func() map[string]*Stream
-	GetStream   func(streamId string) *Stream
-	NewStream   func(streamId string) *Stream
-	SetSnapshot func(streamId string, snapshot *bytes.Buffer)
-	GetSnapshot func(streamId string) *bytes.Buffer
-	ListStreams func() []ListStreamsResponseEntry
+	streams               map[string]*Stream
+	GetStreams            func() map[string]*Stream
+	GetStream             func(streamId string) *Stream
+	NewStream             func(streamId string, isDirectConnect bool, isPrivate bool) *Stream
+	SetSnapshot           func(streamId string, snapshot *bytes.Buffer)
+	SetP2PConnectionCount func(streamId string, count int)
+	GetSnapshot           func(streamId string) *bytes.Buffer
+	ListStreams           func() []ListStreamsResponseEntry
 }
 
 /////////////////////////////streamId///viewerId//signals
 var to_client_signal_buffers = make(map[string][]rtc.Signal, 0)
-
-/////////////////////////////streamId///viewerId//signals
-var to_viewer_signal_buffers = make(map[string]map[string][]rtc.Signal, 0)
 
 func NewStreamManager(g *echo.Group) *StreamManager {
 
@@ -72,8 +72,9 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 		GetStream: func(streamId string) *Stream {
 			return streams[streamId]
 		},
-		NewStream: func(streamId string) (stream *Stream) {
+		NewStream: func(streamId string, isDirectConnect bool, isPrivate bool) (stream *Stream) {
 
+			p2pConnectionCount := 0
 			isAvailable := false
 			keepAliveInterrupt := make(chan bool)
 			uptime := time.Duration(0)
@@ -120,9 +121,11 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 
 			snapshot := bytes.NewBuffer(nil)
 			stream = &Stream{
-				ViewerManager: viewer_manager,
-				Id:            streamId,
-				Connection:    nil,
+				IsDirectConnect: isDirectConnect,
+				IsPrivate:       isPrivate,
+				ViewerManager:   viewer_manager,
+				Id:              streamId,
+				Connection:      nil,
 				GetUptime: func() time.Duration {
 					return uptime
 				},
@@ -136,6 +139,7 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 					keepAlive()
 					snapshot = _snapshot
 				},
+
 				SignalToCaptureClient: func(signal rtc.Signal) error {
 
 					to_client_signal_buffers[streamId] = append(to_client_signal_buffers[streamId], signal)
@@ -143,18 +147,6 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 				},
 				SignalFromCaptureClient: func(signal rtc.Signal) error {
 					keepAlive()
-					viewerId := signal.ViewerId
-
-					if to_viewer_signal_buffers[streamId] == nil {
-						to_viewer_signal_buffers[streamId] = make(map[string][]rtc.Signal, 0)
-					}
-
-					if to_viewer_signal_buffers[streamId][viewerId] == nil {
-						to_viewer_signal_buffers[streamId][viewerId] = make([]rtc.Signal, 0)
-					}
-
-					to_viewer_signal_buffers[streamId][viewerId] =
-						append(to_viewer_signal_buffers[streamId][viewerId], signal)
 					return nil
 				},
 				GetSignalsForCaptureClient: func() chan []rtc.Signal {
@@ -185,49 +177,8 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 
 					return signals_to_send
 				},
-				GetSignalsForViewer: func(viewerId string) chan []rtc.Signal {
-					signals_to_send := make(chan []rtc.Signal)
-					go func() {
-						now := time.Now()
-						for {
-							//if 10 seconds passed, return empty array
-							if time.Since(now) > 10*time.Second {
-								signals_to_send <- make([]rtc.Signal, 0)
-								return
-							}
-
-							if to_viewer_signal_buffers[streamId] == nil {
-								to_viewer_signal_buffers[streamId] = make(map[string][]rtc.Signal, 0)
-							}
-
-							if to_viewer_signal_buffers[streamId][viewerId] == nil {
-								to_viewer_signal_buffers[streamId][viewerId] = make([]rtc.Signal, 0)
-							}
-
-							// wait until signal_buffer[id] is not empty
-							if len(to_viewer_signal_buffers[streamId][viewerId]) > 0 {
-								signals_to_send <- (to_viewer_signal_buffers[streamId][viewerId])
-								to_viewer_signal_buffers[streamId][viewerId] = make([]rtc.Signal, 0)
-								return
-							}
-							time.Sleep(time.Second * 1)
-						}
-					}()
-					return signals_to_send
-				},
 				NewViewer: func(viewerId string) *rtc.PeerConnection {
 					viewerConnection := viewer_manager.NewConnection(viewerId)
-					viewerConnection.OnSignal(func(signal rtc.Signal) {
-						if to_viewer_signal_buffers[streamId] == nil {
-							to_viewer_signal_buffers[streamId] = make(map[string][]rtc.Signal, 0)
-						}
-
-						if to_viewer_signal_buffers[streamId][viewerId] == nil {
-							to_viewer_signal_buffers[streamId][viewerId] = make([]rtc.Signal, 0)
-						}
-						to_viewer_signal_buffers[streamId][viewerId] =
-							append(to_viewer_signal_buffers[streamId][viewerId], signal)
-					})
 
 					return viewerConnection
 				},
@@ -238,9 +189,43 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 					return viewer_manager.GetConnections()
 				},
 				GetViewerCount: func() int {
+					if isDirectConnect {
+						return p2pConnectionCount
+					}
 					return len(viewer_manager.GetConnections())
 				},
+
+				OnViewerConnected: func(cb func(connection string)) {
+					if isDirectConnect {
+						e.On("p2p_viewer_connected", func(ev *emitter.Event) {
+							cb(ev.Args[0].(string))
+						})
+					} else {
+						viewer_manager.OnConnection(cb)
+					}
+				},
+				OnViewerDisconnected: func(cb func(connectionId string)) {
+					if isDirectConnect {
+						e.On("p2p_viewer_disconnected", func(ev *emitter.Event) {
+							cb(ev.Args[0].(string))
+						})
+					} else {
+						viewer_manager.OnDisconnected(cb)
+					}
+				},
+				OnClientConnectionEvent: func(event ConnectionEvent) {
+					if !isDirectConnect || event.ViewerId == stream.Id {
+						return
+					}
+					p2pConnectionCount = event.ViewerCount
+					if event.Type == "viewer_connected" {
+						go e.Emit("p2p_viewer_connected", event.ViewerId)
+					} else {
+						go e.Emit("p2p_viewer_disconnected", event.ViewerId)
+					}
+				},
 				ConnectClient: func() *rtc.PeerConnection {
+					// local peer connection
 					conn := clientConnectionManager.GetConnection(streamId)
 
 					if conn == nil {
@@ -251,16 +236,11 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 						log.Error().
 							Str("streamId", streamId).
 							Msg("client disconnected")
-						// when the capture client disconnects, remove the stream, new viewers will be rejected
-						delete(to_client_signal_buffers, streamId)
+						// connection to the capture client, set to nil, so that it can be recreated
 						stream.Connection = nil
 					})
 
 					conn.OnSignal(func(signal rtc.Signal) {
-						log.Error().
-							Str("viewerId", signal.ViewerId).
-							Str("type", signal.Type).
-							Msg("received signal YES")
 
 						// forward the signal to the capture client
 						to_client_signal_buffers[streamId] = append(
@@ -278,17 +258,6 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 							Msg("failed to create data channel")
 					}
 
-					dc.OnOpen(func() {
-						log.Error().
-							Str("streamId", streamId).
-							Msg("data channel opened")
-					})
-					dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-						log.Error().
-							Str("streamId", streamId).
-							Msg("received data channel message")
-					})
-
 					conn.DataChannel = dc
 
 					// initiate the peer connection with an offer to the capture client
@@ -304,6 +273,7 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 		SetSnapshot: func(streamId string, snapshot *bytes.Buffer) {
 			streams[streamId].SetSnapshot(snapshot)
 		},
+
 		GetSnapshot: func(streamId string) *bytes.Buffer {
 			return streams[streamId].GetSnapshot()
 		},

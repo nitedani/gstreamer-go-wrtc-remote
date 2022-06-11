@@ -10,12 +10,13 @@ import (
 
 func StartWrtcServer() {
 
-	signaling := rtc.NewSignaling()
+	connectionManager := rtc.NewConnectionManager()
+
+	signaling := rtc.NewSignaling(connectionManager)
 
 	videoCapture := capture.NewVideoCapture()
 	audioCapture := capture.NewAudioCapture()
 
-	connectionManager := rtc.NewConnectionManager()
 	trackWriter := rtc.NewTrackWriter(videoCapture, audioCapture)
 
 	connectionManager.OnFirstConnection(func() {

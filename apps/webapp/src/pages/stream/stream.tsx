@@ -24,6 +24,8 @@ import { useStore } from 'src/store/store';
 import { shortcut } from 'src/utils/shortcut';
 import { names } from 'src/utils/keys';
 import { parseEvent } from 'src/utils/parse';
+import io from 'socket.io-client';
+
 const sdpTransform = (sdp: string) => {
   let sdp2 = sdp
     .replace(/(m=video.*\r\n)/g, `$1b=AS:${15 * 1024}\r\n`)
@@ -88,238 +90,239 @@ export const Stream = () => {
   useEffect(() => {
     let pc: RTCPeerConnection;
     const controller = new AbortController();
-    axios
-      .post('/api/connect')
-      .then(() => axios.get('/api/ice-config'))
-      .then((res) => res.data)
-      .then((iceServers) => {
-        pc = new RTCPeerConnection({
-          iceServers,
-        });
+    const socket = io({
+      path: '/api/socket',
+      transports: ['polling'],
+      query: {
+        streamId,
+      },
+    });
 
-        pc.addTransceiver('video', { direction: 'sendrecv' });
-        pc.addTransceiver('audio', { direction: 'sendrecv' });
+    socket.on('conn_ev', (event: any) => {
+      console.log(event);
+    });
 
-        pc.ontrack = (event) => {
-          console.log(event.streams[0].getVideoTracks());
-          console.log(event.streams[0].getAudioTracks());
-          videoRef.current!.srcObject = event.streams[0];
-        };
+    (async () => {
+      const iceServers = await axios
+        .get('/api/ice-config')
+        .then((res) => res.data);
+      pc = new RTCPeerConnection({
+        iceServers,
+      });
 
-        const sendCandidate = async (candidates: RTCIceCandidate[]) => {
-          setLogLines((prev) => [...prev, 'Sending pending ICE candidates...']);
-          await axios.post(
-            signalPath,
+      pc.addTransceiver('video', { direction: 'sendrecv' });
+      pc.addTransceiver('audio', { direction: 'sendrecv' });
+
+      pc.ontrack = (event) => {
+        console.log(event.streams[0].getVideoTracks());
+        console.log(event.streams[0].getAudioTracks());
+        videoRef.current!.srcObject = event.streams[0];
+      };
+
+      const sendCandidate = async (candidates: RTCIceCandidate[]) => {
+        setLogLines((prev) => [...prev, 'Sending pending ICE candidates...']);
+        socket.emit(
+          'signal',
+          JSON.stringify(
             candidates.map((candidate) => ({
               type: 'candidate',
               candidate,
             })),
-          );
-        };
+          ),
+        );
+      };
 
-        const pendingCandidates: RTCIceCandidate[] = [];
-        pc.onicecandidate = async (e) => {
-          if (e.candidate && e.candidate.candidate !== '') {
-            if (!pc.remoteDescription) {
-              pendingCandidates.push(e.candidate);
-              return;
-            }
-            await sendCandidate([e.candidate]);
+      const pendingCandidates: RTCIceCandidate[] = [];
+      pc.onicecandidate = async (e) => {
+        if (e.candidate && e.candidate.candidate !== '') {
+          if (!pc.remoteDescription) {
+            pendingCandidates.push(e.candidate);
+            return;
           }
-        };
+          await sendCandidate([e.candidate]);
+        }
+      };
 
-        const pollSignal = async () => {
-          try {
-            const res = await axios.get(signalPath, {
-              timeout: 30000,
-              signal: controller.signal,
-            });
-            for (const signal of res.data) {
-              if (signal.type === 'candidate') {
-                setLogLines((prev) => [...prev, 'Received ICE candidate...']);
-                pc.addIceCandidate(signal.candidate);
-              } else if (signal.type === 'answer') {
-                setLogLines((prev) => [...prev, 'Received answer...']);
-                const patchedRemote = {
-                  type: signal.type,
-                  sdp: sdpTransform(signal.sdp),
-                };
+      const dc = pc.createDataChannel('data');
 
-                pc.setRemoteDescription(patchedRemote);
-                if (pendingCandidates.length) {
-                  await sendCandidate(pendingCandidates);
-                }
-              } else if (signal.type === 'offer') {
-                setLogLines((prev) => [
-                  ...prev,
-                  'Received renegotiation offer...',
-                ]);
-                const patchedRemote = {
-                  type: signal.type,
-                  sdp: sdpTransform(signal.sdp),
-                };
-                pc.setRemoteDescription(patchedRemote);
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                setLogLines((prev) => [
-                  ...prev,
-                  'Sending renegotiation answer...',
-                ]);
-                await axios.post(signalPath, [
-                  {
-                    type: 'answer',
-                    sdp: answer.sdp,
-                  },
-                ]);
-              }
-            }
-
-            pollSignal();
-          } catch (error) {
-            console.log(error);
-          }
-        };
-        const dc = pc.createDataChannel('data');
-        pc.createOffer().then(async (offer) => {
-          const patchedLocal = {
-            type: offer.type,
-            sdp: sdpTransform(offer.sdp!),
+      socket.on('signal', async (signal: any) => {
+        if (signal.type === 'candidate') {
+          setLogLines((prev) => [...prev, 'Received ICE candidate...']);
+          pc.addIceCandidate(signal.candidate);
+        } else if (signal.type === 'answer') {
+          setLogLines((prev) => [...prev, 'Received answer...']);
+          const patchedRemote = {
+            type: signal.type,
+            sdp: sdpTransform(signal.sdp),
           };
 
-          pc.setLocalDescription(patchedLocal);
+          pc.setRemoteDescription(patchedRemote);
+          if (pendingCandidates.length) {
+            await sendCandidate(pendingCandidates);
+          }
+        } else if (signal.type === 'offer') {
+          setLogLines((prev) => [...prev, 'Received renegotiation offer...']);
+          const patchedRemote = {
+            type: signal.type,
+            sdp: sdpTransform(signal.sdp),
+          };
+          pc.setRemoteDescription(patchedRemote);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          setLogLines((prev) => [...prev, 'Sending renegotiation answer...']);
+          socket.emit(
+            'signal',
+            JSON.stringify([
+              {
+                type: 'answer',
+                sdp: answer.sdp,
+              },
+            ]),
+          );
+        }
+      });
 
-          setLogLines((prev) => [...prev, 'Sending offer...']);
-          await axios.post(signalPath, [patchedLocal]);
-          pollSignal();
+      pc.createOffer().then(async (offer) => {
+        const patchedLocal = {
+          type: offer.type,
+          sdp: sdpTransform(offer.sdp!),
+        };
+
+        pc.setLocalDescription(patchedLocal);
+
+        setLogLines((prev) => [...prev, 'Sending offer...']);
+        socket.emit('signal', JSON.stringify([patchedLocal]));
+      });
+
+      // remote control
+
+      videoRef.current!.addEventListener(
+        'contextmenu',
+        (ev) => {
+          ev.preventDefault();
+          return false;
+        },
+        false,
+      );
+
+      videoRef.current!.onplay = () => {
+        setLoading(false);
+        // videoRef.current!.muted = false;
+        videoRef.current!.volume = volume;
+      };
+
+      dc.onmessage = async (e) => {
+        const json = await parseEvent<{
+          type: 's_move' | 's_mousedown' | 's_mouseup';
+          normX: number;
+          normY: number;
+        }>(e);
+
+        // view
+
+        const width = videoRef.current!.clientWidth;
+        const height = videoRef.current!.clientHeight;
+
+        switch (json.type) {
+          case 's_move':
+            {
+              const x = json.normX * width;
+              const y = json.normY * height;
+              setCursorPosition({ x, y });
+            }
+            break;
+          case 's_mousedown':
+            {
+              animateClick(true);
+            }
+            break;
+          case 's_mouseup':
+            {
+              animateClick(false);
+            }
+            break;
+          default:
+            break;
+        }
+      };
+
+      dc.onopen = () => {
+        videoRef.current!.onmousemove = (e) => {
+          console.log(
+            (document as any).pointerLockElement === videoRef.current ||
+              (document as any).mozPointerLockElement === videoRef.current,
+          );
+          if (
+            (document as any).pointerLockElement === videoRef.current ||
+            (document as any).mozPointerLockElement === videoRef.current
+          ) {
+            dc.send(
+              JSON.stringify({
+                type: 'move_raw',
+                movementX: e.movementX,
+                movementY: e.movementY,
+              }),
+            );
+          } else {
+            const width = videoRef.current!.clientWidth;
+            const height = videoRef.current!.clientHeight;
+            //normalize mouse position
+            const normX = e.offsetX / width;
+            const normY = e.offsetY / height;
+            dc.send(
+              JSON.stringify({
+                type: 'move',
+                normX,
+                normY,
+              }),
+            );
+          }
+        };
+
+        videoRef.current!.addEventListener('mousedown', (e) => {
+          dc.send(JSON.stringify({ type: 'mousedown', button: e.button }));
         });
 
-        // remote control
-
-        videoRef.current!.addEventListener(
-          'contextmenu',
-          (ev) => {
-            ev.preventDefault();
-            return false;
-          },
-          false,
-        );
-
-        videoRef.current!.onplay = () => {
-          setLoading(false);
-          // videoRef.current!.muted = false;
-          videoRef.current!.volume = volume;
+        videoRef.current!.onmouseup = (e) => {
+          dc.send(JSON.stringify({ type: 'mouseup', button: e.button }));
         };
 
-        dc.onmessage = async (e) => {
-          const json = await parseEvent<{
-            type: 's_move' | 's_mousedown' | 's_mouseup';
-            normX: number;
-            normY: number;
-          }>(e);
+        videoRef.current!.onwheel = (e) => {
+          dc.send(JSON.stringify({ type: 'wheel', delta: e.deltaY }));
+        };
 
-          // view
+        videoRef.current!.onclick = () => {
+          videoRef.current!.requestPointerLock();
+        };
 
-          const width = videoRef.current!.clientWidth;
-          const height = videoRef.current!.clientHeight;
-
-          switch (json.type) {
-            case 's_move':
-              {
-                const x = json.normX * width;
-                const y = json.normY * height;
-                setCursorPosition({ x, y });
-              }
-              break;
-            case 's_mousedown':
-              {
-                animateClick(true);
-              }
-              break;
-            case 's_mouseup':
-              {
-                animateClick(false);
-              }
-              break;
-            default:
-              break;
+        document.addEventListener('keydown', (e) => {
+          let key = e.key;
+          if (e.keyCode in names) {
+            key = names[e.keyCode];
           }
-        };
+          console.log('keydown', e);
+          e.stopPropagation();
+          e.preventDefault();
+          dc.send(JSON.stringify({ type: 'keydown', key: e.key }));
+        });
 
-        dc.onopen = () => {
-          videoRef.current!.onmousemove = (e) => {
-            console.log(
-              (document as any).pointerLockElement === videoRef.current ||
-                (document as any).mozPointerLockElement === videoRef.current,
-            );
-            if (
-              (document as any).pointerLockElement === videoRef.current ||
-              (document as any).mozPointerLockElement === videoRef.current
-            ) {
-              dc.send(
-                JSON.stringify({
-                  type: 'move_raw',
-                  movementX: e.movementX,
-                  movementY: e.movementY,
-                }),
-              );
-            } else {
-              const width = videoRef.current!.clientWidth;
-              const height = videoRef.current!.clientHeight;
-              //normalize mouse position
-              const normX = e.offsetX / width;
-              const normY = e.offsetY / height;
-              dc.send(
-                JSON.stringify({
-                  type: 'move',
-                  normX,
-                  normY,
-                }),
-              );
-            }
-          };
+        document.addEventListener('keyup', (e) => {
+          let key = e.key;
+          if (e.keyCode in names) {
+            key = names[e.keyCode];
+          }
+          console.log('keyup', e);
+          e.stopPropagation();
+          e.preventDefault();
+          dc.send(JSON.stringify({ type: 'keyup', key: e.key }));
+        });
+      };
+    })();
 
-          videoRef.current!.addEventListener('mousedown', (e) => {
-            dc.send(JSON.stringify({ type: 'mousedown', button: e.button }));
-          });
-
-          videoRef.current!.onmouseup = (e) => {
-            dc.send(JSON.stringify({ type: 'mouseup', button: e.button }));
-          };
-
-          videoRef.current!.onwheel = (e) => {
-            dc.send(JSON.stringify({ type: 'wheel', delta: e.deltaY }));
-          };
-
-          videoRef.current!.onclick = () => {
-            videoRef.current!.requestPointerLock();
-          };
-
-          document.addEventListener('keydown', (e) => {
-            let key = e.key;
-            if (e.keyCode in names) {
-              key = names[e.keyCode];
-            }
-            console.log('keydown', e);
-            e.stopPropagation();
-            e.preventDefault();
-            dc.send(JSON.stringify({ type: 'keydown', key: e.key }));
-          });
-
-          document.addEventListener('keyup', (e) => {
-            let key = e.key;
-            if (e.keyCode in names) {
-              key = names[e.keyCode];
-            }
-            console.log('keyup', e);
-            e.stopPropagation();
-            e.preventDefault();
-            dc.send(JSON.stringify({ type: 'keyup', key: e.key }));
-          });
-        };
-      });
     return () => {
       pc.close();
       controller.abort();
+      socket.disconnect();
     };
   }, []);
 

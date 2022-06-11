@@ -16,9 +16,9 @@ type ParseJsonValue[T any] struct {
 	Error error
 }
 
-func ParseJson[T any](response *resty.Response) ParseJsonValue[T] {
+func ParseJson[T any](str string) ParseJsonValue[T] {
 	parsed := ParseJsonValue[T]{}
-	err := json.Unmarshal(response.Body(), &parsed.Value)
+	err := json.Unmarshal([]byte(str), &parsed.Value)
 
 	if err != nil {
 		fmt.Println(err)

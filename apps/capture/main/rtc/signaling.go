@@ -30,6 +30,12 @@ type NewStreamBody struct {
 	IsPrivate       bool `json:"isPrivate"`
 }
 
+type ViewerConnectionEvent struct {
+	Type        string `json:"type"`
+	ViewerId    string `json:"viewerId"`
+	ViewerCount int    `json:"viewerCount"`
+}
+
 func Initialize() {
 	config := utils.GetConfig()
 	client := resty.New()
@@ -39,7 +45,7 @@ func Initialize() {
 	}).
 		Post(fmt.Sprintf("%s/connect/%s/internal", config.SignalingServer, config.StreamId))
 
-	log.Info().Str("streamId", config.StreamId).Msg("Connected")
+	log.Info().Str("streamId", config.StreamId).Msg("Connected to signaling server")
 }
 
 func SendSignals(outgoing_signal_chan chan Signal) {
@@ -70,13 +76,19 @@ func PollSignals() chan Signal {
 		for {
 			res, err := client.R().
 				SetHeader("Accept", "application/json").
-				SetQueryParam("isDirectConnect", fmt.Sprintf("%v", config.IsDirectConnect)).
-				SetQueryParam("isPrivate", fmt.Sprintf("%v", config.IsPrivate)).
 				Get(fmt.Sprintf("%s/signal/%s/internal", config.SignalingServer, config.StreamId))
 
+			nok := (err != nil) || (res.StatusCode() != 200)
+
 			if err != nil {
-				log.Err(err).Send()
+				log.Error().Err(err).Msg("Error polling signaling server")
+			}
+
+			if nok {
 				time.Sleep(time.Second * 1)
+				if res.StatusCode() == 404 {
+					Initialize()
+				}
 				continue
 			}
 			body := utils.ParseJson[[]Signal](res)
@@ -116,11 +128,43 @@ func SendSnapshots() {
 	}
 }
 
-func NewSignaling() *Signaling {
+func SendViewerConnectionEvent(event ViewerConnectionEvent) {
+	config := utils.GetConfig()
+
+	client := resty.New()
+
+	_, err := client.R().
+		SetBody(event).
+		Post(fmt.Sprintf("%s/conn-evt/%s/internal", config.SignalingServer, config.StreamId))
+
+	if err != nil {
+		log.Err(err).Send()
+
+	}
+
+}
+
+func NewSignaling(cm *ConnectionManager) *Signaling {
 	Initialize()
 	outgoing_signal_chan := make(chan Signal, 100)
 	go SendSignals(outgoing_signal_chan)
 	go SendSnapshots()
+	cm.OnConnection(func(connection *PeerConnection) {
+		go SendViewerConnectionEvent(ViewerConnectionEvent{
+			Type:        "viewer_connected",
+			ViewerId:    connection.ViewerId,
+			ViewerCount: cm.GetConnectionCount(),
+		})
+	})
+
+	cm.OnDisconnected(func(connection *PeerConnection) {
+		go SendViewerConnectionEvent(ViewerConnectionEvent{
+			Type:        "viewer_disconnected",
+			ViewerId:    connection.ViewerId,
+			ViewerCount: cm.GetConnectionCount(),
+		})
+	})
+
 	signalsChan := PollSignals()
 	return &Signaling{
 		Signal: func(signal Signal) { outgoing_signal_chan <- signal },

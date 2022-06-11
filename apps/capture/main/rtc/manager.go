@@ -8,12 +8,15 @@ import (
 )
 
 type ConnectionManager struct {
-	connections       map[string]*PeerConnection
-	GetConnections    func() map[string]*PeerConnection
-	GetConnection     func(viewerId string) *PeerConnection
-	NewConnection     func(viewerId string) *PeerConnection
-	OnAllDisconnected func(cb func())
-	OnFirstConnection func(cb func())
+	connections        map[string]*PeerConnection
+	GetConnections     func() map[string]*PeerConnection
+	GetConnection      func(viewerId string) *PeerConnection
+	NewConnection      func(viewerId string) *PeerConnection
+	OnAllDisconnected  func(cb func())
+	OnFirstConnection  func(cb func())
+	OnConnection       func(cb func(connection *PeerConnection))
+	OnDisconnected     func(cb func(connection *PeerConnection))
+	GetConnectionCount func() int
 }
 
 func NewConnectionManager() *ConnectionManager {
@@ -37,6 +40,7 @@ func NewConnectionManager() *ConnectionManager {
 
 			connection.OnConnected(func() {
 				numConnections++
+				e.Emit("connection", connection)
 				if numConnections == 1 {
 					e.Emit("firstconnection")
 				}
@@ -45,6 +49,7 @@ func NewConnectionManager() *ConnectionManager {
 			connection.OnDisconnected(func() {
 				numConnections--
 				delete(connections, connection.ViewerId)
+				e.Emit("disconnected", connection)
 				if numConnections == 0 {
 					e.Emit("alldisconnected")
 				}
@@ -60,6 +65,19 @@ func NewConnectionManager() *ConnectionManager {
 			e.On("firstconnection", func(e *emitter.Event) {
 				cb()
 			})
+		},
+		OnConnection: func(cb func(connection *PeerConnection)) {
+			e.On("connection", func(ev *emitter.Event) {
+				cb(ev.Args[0].(*PeerConnection))
+			})
+		},
+		OnDisconnected: func(cb func(connection *PeerConnection)) {
+			e.On("disconnected", func(ev *emitter.Event) {
+				cb(ev.Args[0].(*PeerConnection))
+			})
+		},
+		GetConnectionCount: func() int {
+			return len(connections)
 		},
 	}
 
