@@ -133,6 +133,7 @@ export const Stream = () => {
       };
 
       const pendingCandidates: RTCIceCandidate[] = [];
+      const incomingPendingCandidates: RTCIceCandidate[] = [];
       pc.onicecandidate = async (e) => {
         if (e.candidate && e.candidate.candidate !== '') {
           if (!pc.remoteDescription) {
@@ -148,6 +149,11 @@ export const Stream = () => {
       socket.on('signal', async (signal: any) => {
         if (signal.type === 'candidate') {
           setLogLines((prev) => [...prev, 'Received ICE candidate...']);
+          if (!pc.remoteDescription) {
+            incomingPendingCandidates.push(signal.candidate);
+            return;
+          }
+
           pc.addIceCandidate(signal.candidate);
         } else if (signal.type === 'answer') {
           setLogLines((prev) => [...prev, 'Received answer...']);
@@ -159,6 +165,11 @@ export const Stream = () => {
           pc.setRemoteDescription(patchedRemote);
           if (pendingCandidates.length) {
             await sendCandidate(pendingCandidates);
+          }
+          if (incomingPendingCandidates.length) {
+            for (const c of incomingPendingCandidates) {
+              pc.addIceCandidate(c);
+            }
           }
         } else if (signal.type === 'offer') {
           setLogLines((prev) => [...prev, 'Received renegotiation offer...']);
@@ -292,7 +303,8 @@ export const Stream = () => {
         };
 
         videoRef.current!.onclick = () => {
-          videoRef.current!.requestPointerLock();
+          // works, but I disabled it for now
+          // videoRef.current!.requestPointerLock();
         };
 
         document.addEventListener('keydown', (e) => {

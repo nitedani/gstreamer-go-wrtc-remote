@@ -5,6 +5,7 @@ import (
 	"capture/main/utils"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -181,11 +182,11 @@ func ProcessControlCommands(e *emitter.Emitter) {
 		}
 		if command.Type == "keydown" {
 			fmt.Printf("Received keydown: %s \n", command.Key)
-			//match, _ := regexp.MatchString("[áéíóöőúüűÁÉÍÓÖŐÚÜŰ:?\"+!%/=()>*[]{}]", command.Key)
+			match, _ := regexp.MatchString("[áéíóöőúüűÁÉÍÓÖŐÚÜŰ:?\"+!%\\/=()<;@&#>*[\\]{}_'$]", command.Key)
 			//log.Error().Msgf("match: %d", match)
 			//fmt.Println(match)
-			length := len([]rune(command.Key))
-			if length == 1 {
+			//length := len([]rune(command.Key))
+			if match {
 				robotgo.TypeStr(command.Key)
 			} else {
 				mapped_key := handleSpecialKey(command.Key)

@@ -11,12 +11,13 @@ import (
 )
 
 type PeerConnection struct {
-	ViewerId       string
-	OnSignal       func(cb func(signal Signal))
-	Signal         func(signal Signal) error
-	OnConnected    func(cb func())
-	OnDisconnected func(cb func())
-	AddTracks      func(tracks *Tracks)
+	ViewerId          string
+	OnSignal          func(cb func(signal Signal))
+	Signal            func(signal Signal) error
+	OnConnected       func(cb func())
+	OnDisconnected    func(cb func())
+	AddTracks         func(tracks *Tracks)
+	PendingCandidates []*webrtc.ICECandidate
 	*webrtc.PeerConnection
 	*emitter.Emitter
 }
@@ -66,6 +67,12 @@ func (peerConnection *PeerConnection) initializeConnection() {
 		if c == nil {
 			return
 		}
+		desc := peerConnection.RemoteDescription()
+		if desc == nil {
+			peerConnection.PendingCandidates = append(peerConnection.PendingCandidates, c)
+			return
+		}
+
 		json := c.ToJSON()
 		signal := Signal{
 			ViewerId:  peerConnection.ViewerId,
@@ -143,6 +150,17 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 					log.Err(err).Send()
 					return err
 				}
+				for _, c := range peerConnection.PendingCandidates {
+					json := c.ToJSON()
+					signal := Signal{
+						ViewerId:  peerConnection.ViewerId,
+						Type:      "candidate",
+						Candidate: json,
+					}
+					go func() {
+						e.Emit("signal", signal)
+					}()
+				}
 			case "candidate":
 				if !initialized {
 					log.Warn().
@@ -160,17 +178,17 @@ func newConnection(viewerId string) (peerConnection *PeerConnection) {
 		},
 		OnSignal: func(cb func(signal Signal)) {
 			e.On("signal", func(e *emitter.Event) {
-				cb(e.Args[0].(Signal))
+				go cb(e.Args[0].(Signal))
 			})
 		},
 		OnDisconnected: func(cb func()) {
 			peerConnection.Once("disconnected", func(e *emitter.Event) {
-				cb()
+				go cb()
 			})
 		},
 		OnConnected: func(cb func()) {
 			peerConnection.Once("connected", func(e *emitter.Event) {
-				cb()
+				go cb()
 			})
 		},
 		AddTracks: func(tracks *Tracks) {

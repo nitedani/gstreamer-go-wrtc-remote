@@ -111,7 +111,7 @@ func (peerConnection *PeerConnection) initializeConnection() {
 		localTrack := peerConnection.AddRemoteTrack(tr)
 		peerConnection.LocalTracks = append(peerConnection.LocalTracks, localTrack)
 		go func() {
-			peerConnection.Emit("track", localTrack)
+			peerConnection.EmitterVoid.Emit("track", localTrack)
 		}()
 	})
 }
@@ -349,39 +349,42 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 			connectDatachannel(peerConnection, other)
 			connectDatachannel(other, peerConnection)
 
-			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateConnected {
-				if len(peerConnection.LocalTracks) > 0 {
-					for _, track := range peerConnection.LocalTracks {
-						other.AddTrack(track)
-					}
+			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateConnected && len(peerConnection.LocalTracks) == 2 {
+				for _, track := range peerConnection.LocalTracks {
+					other.AddTrack(track)
 				}
 			} else {
 				peerConnection.OnConnected(func() {
-					time.Sleep(time.Millisecond * 1000)
-					if len(peerConnection.LocalTracks) > 0 {
-						for _, track := range peerConnection.LocalTracks {
-							_, err := other.AddTrack(track)
-							if err != nil {
-								panic(err)
-							}
-							//processRTCP(rtpSender)
-						}
-						time.Sleep(time.Millisecond * 1000)
-						// re-negotiate with the browser
-						other.Initiate()
-
-					}
-					peerConnection.On("track", func(e *emitter.Event) {
+					peerConnection.EmitterVoid.On("track", func(e *emitter.Event) {
 						track := e.Args[0].(*webrtc.TrackLocalStaticRTP)
 						_, err := other.AddTrack(track)
 						if err != nil {
 							panic(err)
 						}
 						//processRTCP(rtpSender)
-						// re-negotiate with the browser
-						other.Initiate()
 
+						// if we got audio and video
+						// re-negotiate with the browser
+						if len(peerConnection.LocalTracks) == 2 {
+							other.Initiate()
+						}
 					})
+
+					/*
+						if len(peerConnection.LocalTracks) > 0 {
+							for _, track := range peerConnection.LocalTracks {
+								_, err := other.AddTrack(track)
+								if err != nil {
+									panic(err)
+								}
+								//processRTCP(rtpSender)
+							}
+
+							// re-negotiate with the browser
+							other.Initiate()
+
+						}
+					*/
 				})
 			}
 

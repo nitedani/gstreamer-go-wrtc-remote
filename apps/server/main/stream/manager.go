@@ -154,7 +154,9 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 					signals_to_send := make(chan []rtc.Signal)
 					go func() {
 						now := time.Now()
-						for {
+						// 10 fps ticker
+						ticker := time.NewTicker(time.Second / 10)
+						for range ticker.C {
 
 							//if 10 seconds passed, return empty array
 							if time.Since(now) > 10*time.Second {
@@ -171,7 +173,6 @@ func NewStreamManager(g *echo.Group) *StreamManager {
 								}
 							}
 
-							time.Sleep(time.Second * 1)
 						}
 					}()
 
