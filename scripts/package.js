@@ -23,12 +23,11 @@ const runWebpack = (compiler) =>
   });
 
 const baseDir = resolve(__dirname, '..');
-const streamServerDir = join(baseDir, 'apps', 'capture');
+const clientDir = join(baseDir, 'apps', 'client');
 const serverDir = join(baseDir, 'apps', 'server');
 
 const buildCaptureWin = async () => {
-  const webviewDlls = join(streamServerDir, 'dll', 'x64');
-  const gstreamerDlls = join(streamServerDir, 'gstreamer', 'dll');
+  const gstreamerDlls = join(clientDir, 'gstreamer', 'dll');
   const TMPpath = mkdtempSync(join(os.tmpdir(), 'build-win64-'));
   const TMPbuildPath = join(TMPpath, 'main.exe');
   const TMParchivePath = join(TMPpath, 'capture-win64.7z');
@@ -40,18 +39,13 @@ const buildCaptureWin = async () => {
 
   const buildEnv = {
     CGO_ENABLED: 1,
-    CGO_CFLAGS: `-I${join(streamServerDir, 'gstreamer', 'include')}`,
-    CGO_LDFLAGS: `-L${join(streamServerDir, 'gstreamer', 'lib')} -L${join(
-      streamServerDir,
+    CGO_CFLAGS: `-I${join(clientDir, 'gstreamer', 'include')}`,
+    CGO_LDFLAGS: `-L${join(clientDir, 'gstreamer', 'lib')} -L${join(
+      clientDir,
       'dll',
       'x64',
     )}`,
-    PKG_CONFIG_PATH: `${join(
-      streamServerDir,
-      'gstreamer',
-      'lib',
-      'pkgconfig',
-    )}`,
+    PKG_CONFIG_PATH: `${join(clientDir, 'gstreamer', 'lib', 'pkgconfig')}`,
   };
   /*
   await exec(`cd ${streamServerDir}\\main && go clean -cache`, {
@@ -59,9 +53,13 @@ const buildCaptureWin = async () => {
     env: { ...process.env, ...buildEnv },
   });
 */
+  execSync(`cd ${clientDir}/frontend && npm run build`, {
+    stdio: 'inherit',
+  });
+
   await exec(
-    /////////////////////////////////////////////////// -H windowsgui /////////////////////
-    `cd ${streamServerDir}\\main && go build -ldflags=\"-s -w\" -v -o ${TMPbuildPath}`,
+    ///////////////////////////////////////////////////// -ldflags \"-w -h -H windowsgui\"
+    `cd ${clientDir} && go build -tags desktop,production -ldflags=\"-s -w\" -v -o ${TMPbuildPath}`,
     {
       stdio: 'inherit',
       env: { ...process.env, ...buildEnv },
@@ -108,8 +106,6 @@ GUIMode="2"
       join(TMPpath, '*'),
       //gstreamer dlls
       join(gstreamerDlls, '*'),
-      //webview dlls
-      join(webviewDlls, '*'),
     ],
     {
       stdio: 'inherit',

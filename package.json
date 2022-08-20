@@ -12,7 +12,7 @@
     "build": "node scripts/package.js",
     "build:docker": "node scripts/docker.js",
     "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,html,css,scss}\"",
-    "start:dev": "concurrently \"webpack serve -c apps/webapp/webpack.config.dev.js\" \"webpack serve -c apps/gui/webpack.config.dev.js\" \"node scripts/dev\" \"opener http://localhost:3000\"",
+    "start:dev": "node scripts/dev",
     "start:prod": "cross-env NODE_ENV=production node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.{ts,tsx}\" --fix",
     "test": "npm run pre-commit",
