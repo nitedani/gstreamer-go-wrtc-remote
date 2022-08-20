@@ -12,7 +12,6 @@ import (
 )
 
 func NewAudioCapture() *ControlledCapture {
-	counter := 0
 	config := utils.GetMediaConfig()
 	e := &emitter.Emitter{}
 	e.Use("*", emitter.Void)
@@ -77,45 +76,9 @@ func NewAudioCapture() *ControlledCapture {
 		},
 	})
 
-	start := func() {
-		pipeline.SetState(gst.StatePlaying)
-	}
-
-	stop := func() {
-		pipeline.SetState(gst.StatePaused)
-	}
-
 	return &ControlledCapture{
-		Emitter: e,
-		Start:   start,
-		Stop:    stop,
-		GetChannel: func() (chan *gst.Buffer, func()) {
-			counter++
-			channel := make(chan *gst.Buffer, 2)
-			writing := false
-			subscription := e.On("data", func(e *emitter.Event) {
-				if writing {
-					return
-				}
-				writing = true
-				channel <- e.Args[0].(*gst.Buffer)
-				writing = false
-			})
-
-			cleanup := func() {
-				e.Off("data", subscription)
-				close(channel)
-				counter--
-				if counter == 0 {
-					stop()
-				}
-			}
-
-			if counter == 1 {
-				start()
-			}
-
-			return channel, cleanup
-		},
+		Emitter:  e,
+		counter:  0,
+		pipeline: pipeline,
 	}
 }
