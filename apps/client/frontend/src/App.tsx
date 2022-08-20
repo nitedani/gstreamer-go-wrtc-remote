@@ -31,7 +31,7 @@ function App() {
           type="text"
         />
         <button className="btn" onClick={greet}>
-          YE
+          Hi
         </button>
       </div>
     </div>
