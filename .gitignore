@@ -38,3 +38,4 @@ lerna-debug.log*
 .env.production
 package-lock.json
 sa-private-key.json
+client/build/bin

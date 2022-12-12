@@ -73,7 +73,7 @@ const buildCaptureWin = async () => {
 set PATH=%PATH%;dll
 set GST_PLUGIN_PATH_1_0=plugins
 set GO_ENV=release
-call main.exe %1`;
+call main.exe`;
 
   writeFileSync(join(TMPpath, 'start.bat'), startupScript);
 
@@ -81,7 +81,6 @@ call main.exe %1`;
 ;!@Install@!UTF-8!
 GUIMode="2"
 ExecuteFile="start.bat"
-ExecuteParameters="%%S\\config.json"
 ;!@InstallEnd@!`;
 
   const sfxAutorunScriptPath = join(TMPpath, 'sfx-autorun.txt');
@@ -128,24 +127,24 @@ GUIMode="2"
     },
   );
 
-  const exampleConfig = `\
-{
-  "settings": {
-    "stream_id": "stream_test",
-    "private": false,
-    "remote_enabled": false,
-    "direct_connect": true,
-    "bitrate": 10485760,
-    "resolution": "1920x1080",
-    "framerate": 60,
-    "encoder": "nvenc",
-    "threads": 4,
-    "server_url": "http://localhost:4000/api"
-  }
-}
-`;
+//   const exampleConfig = `\
+// {
+//   "settings": {
+//     "strea${m_id": "stream_test",
+//     "private": false,
+//     "remote_enabled": false,
+//     "direct_connect": true,
+//     "bitrate": 10485760,
+//     "resolution": "1920x1080",
+//     "framerate": 60,
+//     "encoder": "nvenc",
+//     "threads": 4,
+//     "server_url": "http://localhost:4000/api"
+//   }
+// }
+// `;
 
-  writeFileSync(join(finalPath, 'config.json'), exampleConfig);
+//   writeFileSync(join(finalPath, 'config.json'), exampleConfig);
 
   rimraf.sync(TMPpath);
 };
