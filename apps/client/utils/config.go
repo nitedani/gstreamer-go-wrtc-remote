@@ -71,7 +71,7 @@ var config *Config
 
 func initConfig() {
 
-	configPath := os.Args[1]
+	configPath := os.Getenv("CONFIG_PATH")
 
 	jsonFile, err := os.Open(configPath)
 	if err != nil {

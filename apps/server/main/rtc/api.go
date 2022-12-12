@@ -5,10 +5,7 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-var api *webrtc.API
-var settings webrtc.SettingEngine
-
-func SetupApi() {
+func SetupApi() *webrtc.API {
 	engine := &webrtc.MediaEngine{}
 
 	// Register Interceptors
@@ -69,12 +66,14 @@ func SetupApi() {
 		panic(err)
 	}
 
-	settings = webrtc.SettingEngine{}
+	// settings = webrtc.SettingEngine{}
 
-	api = webrtc.NewAPI(
+	api := webrtc.NewAPI(
 		webrtc.WithMediaEngine(engine),
 		webrtc.WithInterceptorRegistry(i),
-		webrtc.WithSettingEngine(settings),
+		// webrtc.WithSettingEngine(settings),
 	)
+
+	return api
 
 }

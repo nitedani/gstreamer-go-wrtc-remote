@@ -9,14 +9,7 @@
       "path": "apps\\webapp"
     },
     {
-      "name": "capture",
-      "path": "apps\\capture"
-    },
-    {
       "path": "apps\\server"
-    },
-    {
-      "path": "apps\\gui"
     },
     {
       "path": "apps\\client"
