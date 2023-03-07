@@ -66,6 +66,8 @@ func SetupApi() *webrtc.API {
 		panic(err)
 	}
 
+	// add default interceptors
+	// err = webrtc.RegisterDefaultInterceptors(engine, i)
 	// settings = webrtc.SettingEngine{}
 
 	api := webrtc.NewAPI(

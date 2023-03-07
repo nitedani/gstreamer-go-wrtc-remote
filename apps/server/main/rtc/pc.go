@@ -7,7 +7,10 @@ import (
 
 	"github.com/olebedev/emitter"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
+	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v3/pkg/media/samplebuilder"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,7 +33,7 @@ type PeerConnection struct {
 	OnDisconnected    func(cb func())
 	AddTracks         func(tracks *Tracks)
 	ConnectTo         func(peerConnection *PeerConnection)
-	LocalTracks       []*webrtc.TrackLocalStaticRTP
+	LocalTracks       []*webrtc.TrackLocalStaticSample
 	PendingCandidates []*webrtc.ICECandidate
 	SetSnapshot       func(snapshot *bytes.Buffer)
 	GetSnapshot       func() *bytes.Buffer
@@ -143,80 +146,58 @@ func (peerConnection *PeerConnection) applyOffer(signal Signal) (*Signal, error)
 
 }
 
-type Packet struct {
-	len int
-	buf []byte
-}
+func (peerConnection *PeerConnection) AddRemoteTrack(upTrack *webrtc.TrackRemote) *webrtc.TrackLocalStaticSample {
 
-func (peerConnection *PeerConnection) AddRemoteTrack(tr *webrtc.TrackRemote) *webrtc.TrackLocalStaticRTP {
-	outputTrack, err := webrtc.NewTrackLocalStaticRTP(tr.Codec().RTPCodecCapability, tr.ID(), "proxy")
-	if err != nil {
-		panic(err)
-	}
 	go func() {
-		ticker := time.NewTicker(time.Second * 3)
+		ticker := time.NewTicker(time.Second * 2)
 		for range ticker.C {
 			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
 				return
 			}
 
-			errSend := peerConnection.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(tr.SSRC())}})
+			errSend := peerConnection.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(upTrack.SSRC())}})
 			if errSend != nil {
 				return
 			}
 		}
 	}()
 
+	var depacketizer rtp.Depacketizer
+	if upTrack.Codec().RTPCodecCapability.MimeType == webrtc.MimeTypeH264 {
+		depacketizer = &codecs.H264Packet{}
+	} else if upTrack.Codec().RTPCodecCapability.MimeType == webrtc.MimeTypeVP8 {
+		depacketizer = &codecs.VP8Packet{}
+	} else if upTrack.Codec().RTPCodecCapability.MimeType == webrtc.MimeTypeOpus {
+		depacketizer = &codecs.OpusPacket{}
+	}
+
+	downTrack, err := webrtc.NewTrackLocalStaticSample(upTrack.Codec().RTPCodecCapability, upTrack.ID(), "proxy")
+	if err != nil {
+		panic(err)
+	}
+	maxLate := 1000
+	sb := samplebuilder.New(uint16(maxLate), depacketizer, upTrack.Codec().ClockRate)
 	go func() {
-		rtp_buffer := make(chan *Packet, 1024)
-
-		defer func() {
-			close(rtp_buffer)
-		}()
-
-		// consumer
-		go func() {
-			for {
-				if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
-					return
-				}
-
-				packet, ok := <-rtp_buffer
-
-				if !ok {
-					return
-				}
-
-				if _, writeErr := outputTrack.Write(packet.buf[:packet.len]); writeErr != nil {
-					return
-				}
-
-			}
-		}()
-
-		// producer
 		for {
-			if peerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
-				return
+			packet, _, readErr := upTrack.ReadRTP()
+			if readErr != nil {
+				panic(readErr)
+			}
+			sb.Push(packet)
+			mediaSample := sb.Pop()
+			if mediaSample == nil {
+				continue
 			}
 
-			b := make([]byte, 1460)
-			i, _, err := tr.Read(b)
-			if err != nil {
-				return
+			if err := downTrack.WriteSample(
+				*mediaSample,
+			); err != nil {
+				panic(err)
 			}
-
-			packet := &Packet{
-				len: i,
-				buf: b,
-			}
-			rtp_buffer <- packet
-
 		}
-
 	}()
 
-	return outputTrack
+	return downTrack
 }
 
 func (peerConnection *PeerConnection) Initiate() {
@@ -274,7 +255,7 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 	eVoid := &emitter.Emitter{}
 
 	eVoid.Use("*", emitter.Void)
-	localTracks := make([]*webrtc.TrackLocalStaticRTP, 0)
+	localTracks := make([]*webrtc.TrackLocalStaticSample, 0)
 	pendingCandidates := make([]*webrtc.ICECandidate, 0)
 	var snapshot *bytes.Buffer = nil
 
@@ -356,7 +337,7 @@ func newConnection(Id string) (peerConnection *PeerConnection) {
 			} else {
 				peerConnection.OnConnected(func() {
 					peerConnection.EmitterVoid.On("track", func(e *emitter.Event) {
-						track := e.Args[0].(*webrtc.TrackLocalStaticRTP)
+						track := e.Args[0].(*webrtc.TrackLocalStaticSample)
 						_, err := other.AddTrack(track)
 						if err != nil {
 							panic(err)

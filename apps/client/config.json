@@ -3,7 +3,7 @@
     "stream_id": "stream_test",
     "private": false,
     "remote_enabled": false,
-    "direct_connect": true,
+    "direct_connect": false,
     "bitrate": 6038860,
     "resolution": "1920x1080",
     "framerate": 60,
